@@ -37,7 +37,10 @@ read -p 'Your Public IP Address: ' PUBLIC_IP
 
 # GETH EXTERNAL
 if [ "$1" = "gethexternal" ]; then
+  read -p 'GETH HOST PROTOCOL HTTP OR HTTPS: ' GETH_HTTP
   read -p 'GETH HOST: ' GETH_HOST
+  read -p 'GETH PORT (ex: 8545): ' GETH_PORT GETH_WS_PORT
+  read -p 'GETH WS_PORT (ex: 8546): ' GETH_WS_PORT
 fi
 
 read -p 'Servicenode Name: ' SN_NAME
@@ -54,7 +57,7 @@ if [ "$1" = "dev" ]; then
   echo "Development mode"
   PUBLIC_IP=$PUBLIC_IP SN_NAME=$SN_NAME SN_KEY=$SN_KEY SN_ADDRESS=$SN_ADDRESS RPC_USER=$RPC_USER RPC_PASSWORD=$RPC_PASSWORD docker-compose -f "docker-compose-dev.yml" up -d --build
 elif [ "$1" = "gethexternal" ]; then
-  PUBLIC_IP=$PUBLIC_IP SN_NAME=$SN_NAME SN_KEY=$SN_KEY SN_ADDRESS=$SN_ADDRESS RPC_USER=$RPC_USER RPC_PASSWORD=$RPC_PASSWORD GETH_HOST=$GETH_HOST docker-compose -f "docker-compose-geth-external.yml" up -d --build
+  PUBLIC_IP=$PUBLIC_IP SN_NAME=$SN_NAME SN_KEY=$SN_KEY SN_ADDRESS=$SN_ADDRESS RPC_USER=$RPC_USER RPC_PASSWORD=$RPC_PASSWORD GETH_HTTP=$GETH_HTTP GETH_HOST=$GETH_HOST GETH_PORT=$GETH_PORT GETH_WS_PORT=$GETH_WS_PORT docker-compose -f "docker-compose-geth-external.yml" up -d --build
 else
   PUBLIC_IP=$PUBLIC_IP SN_NAME=$SN_NAME SN_KEY=$SN_KEY SN_ADDRESS=$SN_ADDRESS RPC_USER=$RPC_USER RPC_PASSWORD=$RPC_PASSWORD docker-compose -f "docker-compose.yml" up -d --build
 fi

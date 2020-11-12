@@ -38,3 +38,11 @@ export RPC_USER="user"
 export RPC_PASSWORD="password"
 docker-compose -f "docker-compose.yml" up -d --build
 ```
+
+# Request Project example
+```
+curl http://127.0.0.1/xrs/eth_passthrough \
+    -X POST \
+    -H "Content-Type: application/json" \
+    -d '{"jsonrpc":"2.0","method":"request_project","params": [],"id":1}'
+```
