@@ -19,7 +19,7 @@ xbridgeconfj2_url = "https://raw.githubusercontent.com/blocknetdx/blockchain-con
 
 
 def load_template(template_url):
-  # load_template - downloads from url provided and returns the data
+	# load_template - downloads from url provided and returns the data
 	while True:
 		response = urllib.request.urlopen(template_url)
 		if response.getcode() == 200:
@@ -44,7 +44,7 @@ def save_config(configData, confFile):
 
 
 def load_url(load_url):
-  # load_template - downloads from url provided and returns the data
+	# load_template - downloads from url provided and returns the data
 	with urllib.request.urlopen(load_url) as response:
 		data = response.read()
 		result = data.decode('utf-8')
