@@ -21,7 +21,7 @@ if [ $avax = "y" ]; then
 	echo "remove avax folder"
 	rm -rf avalanchego >/dev/null 2>&1
 else
-  echo "Not cloning avalanchego"
+  echo "Not building avalanchego"
 fi
 
 #echo image with tag
