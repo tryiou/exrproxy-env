@@ -1,14 +1,22 @@
-# autobuild
-
+### Autobuild
 Generate **docker-compose** file using Jinja2 template from custom configuration **custom.yaml**
 
-## custom.yaml format
+- just run app.py from autobuild directory, it will consume custom.yaml and create a dockercompose file.
+- copy dockercompose file to project root
+- run deploy.sh
 
-* j2template - Jinja2 template to be used
-* name - output docker-compose file name
-* daemons 
+### custom.yaml format
+- j2template - Jinja2 template to be used
+- name - output docker-compose file name
+- daemons
 
-## mandatory daemon vars
+### Examples Provided
+- Full stack w/ Geth, EXR, Snode, BTC and LTC
+```
+examples/gethpaymentbtcltcsnode.yaml
+```
+
+### mandatory daemon vars
 
 All daemons are declared using the following structure
 ```   
