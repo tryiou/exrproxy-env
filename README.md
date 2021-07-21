@@ -1,4 +1,7 @@
 # xrouter-proxy-auto-deploy for use with hydra
+- This app provide an auto configuration tool which generates a dockercompose file and all proper xbridge/xrouter configurations based off custom.yaml
+- https://github.com/blocknetdx/exrproxy-env/blob/master/autobuild/README.md
+
 
 # Requirements
 - `Docker`
