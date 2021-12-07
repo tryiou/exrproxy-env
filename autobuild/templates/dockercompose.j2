@@ -43,12 +43,19 @@ services:
 {% if blocknet_node == 'snode' %}
       - {{ snode_config_mount_dir }}/snode/config:/opt/blockchain/config
       - {{ snode_data_mount_dir }}/snode/data:/opt/blockchain/data
+      - {{ snode_data_mount_dir }}/snode/data:/opt/blockchain/data/log
 {% elif blocknet_node == 'tnode' %}
       - {{ tnode_config_mount_dir }}/tnode/config:/opt/blockchain/config
       - {{ tnode_data_mount_dir }}/tnode/data:/opt/blockchain/data
+      - {{ tnode_data_mount_dir }}/tnode/data:/opt/blockchain/data/log
 {% elif blocknet_node == 'testsnode' %}
       - {{ testsnode_config_mount_dir }}/testsnode/config:/opt/blockchain/config
       - {{ testsnode_data_mount_dir }}/testsnode/data:/opt/blockchain/data/testnet6
+      - {{ testsnode_data_mount_dir }}/testsnode/data:/opt/blockchain/data/log
+{% elif blocknet_node == 'testtnode' %}
+      - {{ testtnode_config_mount_dir }}/testtnode/config:/opt/blockchain/config
+      - {{ testtnode_data_mount_dir }}/testtnode/data:/opt/blockchain/data/testnet6
+      - {{ testtnode_data_mount_dir }}/testtnode/data:/opt/blockchain/data/log
 {% endif %}
       - type: bind
         source: ./scripts
@@ -60,7 +67,15 @@ services:
         source: ./scripts/config/xbridge.conf
         target: /opt/blockchain/data/xbridge.conf
     ports:
+{% if blocknet_node == 'snode' %}
       - "41412:41412"
+{% elif blocknet_node == 'tnode' %}
+      - "41412:41412"
+{% elif blocknet_node == 'testsnode' %}
+      - "41474:41474"
+{% elif blocknet_node == 'testtnode' %}
+      - "41474:41474"
+{% endif %}
     networks:
       backend:
 {% if blocknet_node == 'snode' %}
@@ -69,6 +84,8 @@ services:
         ipv4_address: {{ tnode_ip }}
 {% elif blocknet_node == 'testsnode' %}
         ipv4_address: {{ testsnode_ip }}
+{% elif blocknet_node == 'testtnode' %}
+        ipv4_address: {{ testtnode_ip }}
 {% endif %}
 
 {% if deploy_xquery %}

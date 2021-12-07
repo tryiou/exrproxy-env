@@ -11,21 +11,27 @@ set-ph = SERVICENODE_PRIVKEY=${SN_KEY}
 
 {% if blocknet_node == 'testsnode' %}
 set-ph = BLOCKNET_CHAIN=testnet
+set-ph = HANDLE_PAYMENTS_RPC_PORT=41419
+set-ph = RPC_BLOCK_PORT=41419
+{% elif blocknet_node == 'testtnode' %}
+set-ph = BLOCKNET_CHAIN=testnet
+set-ph = HANDLE_PAYMENTS_RPC_PORT=41419
+set-ph = RPC_BLOCK_PORT=41419
 {% else %}
 set-ph = BLOCKNET_CHAIN=mainnet
+set-ph = HANDLE_PAYMENTS_RPC_PORT=41414
+set-ph = RPC_BLOCK_PORT=41414
 {% endif %}
 set-ph = PLUGINS={{ xrouter_plugins }}
 set-ph = HANDLE_PAYMENTS=true
 set-ph = HANDLE_PAYMENTS_ENFORCE=true
 set-ph = HANDLE_PAYMENTS_RPC_INCLUDE_HEADERS=true
 set-ph = HANDLE_PAYMENTS_RPC_HOSTIP={{ blocknet_node }}
-set-ph = HANDLE_PAYMENTS_RPC_PORT=41414
 set-ph = HANDLE_PAYMENTS_RPC_USER=${RPC_USER}
 set-ph = HANDLE_PAYMENTS_RPC_PASS=${RPC_PASSWORD}
 set-ph = HANDLE_PAYMENTS_RPC_VER=2.0
 
 set-ph = RPC_BLOCK_HOSTIP={{ blocknet_node }}
-set-ph = RPC_BLOCK_PORT=41414
 set-ph = RPC_BLOCK_USER=${RPC_USER}
 set-ph = RPC_BLOCK_PASS=${RPC_PASSWORD}
 set-ph = RPC_BLOCK_VER=2.0

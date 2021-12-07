@@ -5,13 +5,10 @@ datadir=/opt/blockchain/data
 
 maxmempoolxbridge=128
 
-port=41412
-rpcport=41414
-
+testnet=1
 daemon=0
 listen=1
 server=1
-testnet=1
 logtimestamps=1
 logips=1
 enableexchange=1
@@ -22,10 +19,22 @@ rpcthreads=8
 rpcuser=${RPC_USER}
 rpcpassword=${RPC_PASSWORD}
 
+[test]
+port=41474
+rpcport=41419
 rpcallowip=172.31.0.0/20
 rpcbind=0.0.0.0
-rpctimeout=30
+rpcwaittimeout=30
 rpcclienttimeout=30
+
+addnode=185.246.56.72:41474
+addnode=207.246.71.189:41474
+addnode=95.216.170.154:41474
+addnode=54.158.97.146:41474
+addnode=84.17.46.24:41474
+addnode=185.93.182.252:41474
+addnode=45.152.183.4:41474
+
 EOL
 
 cat > /opt/blockchain/data/servicenode.conf << EOL
@@ -50,7 +59,7 @@ cat > /opt/blockchain/data/xrouter.conf << EOL
 #! host=mynode.example.com
 #! host=208.67.222.222
 host=${PUBLIC_IP}
-wallets=BLOCK ,BTC,LTC
+wallets=TBLOCK,BTC,LTC
 #! plugins=eth_accounts,eth_blockNumber,eth_call,eth_chainId,eth_estimateGas,eth_gasPrice,eth_getBalance,eth_getBlockByHash,eth_getBlockByNumber,eth_getBlockTransactionCountByHash,eth_getBlockTransactionCountByNumber,eth_getCode,eth_getLogs,eth_getStorageAt,eth_getTransactionByBlockHashAndIndex,eth_getTransactionByBlockNumberAndIndex,eth_getTransactionByHash,eth_getTransactionCount,eth_getTransactionReceipt,eth_getUncleByBlockHashAndIndex,eth_getUncleByBlockNumberAndIndex,eth_getUncleCountByBlockHash,eth_getUncleCountByBlockNumber,eth_getWork,eth_hashrate,eth_mining,eth_protocolVersion,eth_sendRawTransaction,eth_submitWork,eth_syncing,eth_uninstallFilter,net_listening,net_peerCount,net_version,web3_clientVersion,web3_sha3,parity_allTransactionHashes,parity_allTransactions,eth_newBlockFilter,eth_newPendingTransactionFilter,eth_getFilterChanges,eth_getFilterLogs,eth_newFilter,eth_unsubscribe,parity_unsubscribe
 plugins=eth_passthrough
 
@@ -82,7 +91,7 @@ cat > /opt/blockchain/data/xbridge.conf << EOL
 FullLog=true
 LogPath=
 ExchangeTax=300
-ExchangeWallets=BLOCK,BTC,LTC
+ExchangeWallets=TBLOCK,BTC,LTC
 
 [BTC]
 Title=Bitcoin
@@ -128,16 +137,16 @@ BlockTime=150
 FeePerByte=10
 Confirmations=0
 
-[BLOCK]
+[TBLOCK]
 Title=Blocknet
 Address=
 Ip=127.0.0.1
-Port=41414
+Port=41419
 Username=useruser
 Password=passpass
-AddressPrefix=26
-ScriptPrefix=28
-SecretPrefix=154
+AddressPrefix=139
+ScriptPrefix=19
+SecretPrefix=239
 COIN=100000000
 MinimumAmount=0
 TxVersion=1

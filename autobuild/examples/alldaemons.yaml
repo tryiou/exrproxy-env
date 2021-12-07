@@ -17,9 +17,11 @@
       image: blocknetdx/servicenode:latest # DO NOT DELETE
       config_mount_dir: /snode # DO NOT DELETE
       data_mount_dir: /snode # DO NOT DELETE
+    # AVALANCHE INDEXER - DELETE IF NOT NEEDED  
     - name: XQUERY 
       image: avaplatform/avalanchego:v1.6.1
       data_mount_dir: /media/arcsecure/data/snode
+    # THE STANDARD XLITE WALLET SET - DELETE ANY YOU DON'T NEED  
     - name: BTC
       image: blocknetdx/bitcoin:v0.20.0
       config_mount_dir: /snode
@@ -33,10 +35,23 @@
       config_mount_dir: /snode
       data_mount_dir: /snode
     - name: SYS
-      image: blocknetdx/syscoin4:v4.2.2
+      image: blocknetdx/syscoin4:v4.3.0
       config_mount_dir: /snode
       data_mount_dir: /snode
     - name: PIVX
-      image: blocknetdx/pivx:v5.3.2
+      image: blocknetdx/pivx:v5.3.2.1-staging
+      config_mount_dir: /snode
+      data_mount_dir: /snode
+    - name: DASH
+      image: blocknetdx/dash:v0.17.0.3-staging
+      config_mount_dir: /snode
+      data_mount_dir: /snode
+    # OTHERS - DELETE ANY YOU DON'T NEED  
+    - name: MUE
+      image: blocknetdx/mue:v2.2.0-staging
+      config_mount_dir: /snode
+      data_mount_dir: /snode
+    - name: RAVEN
+      image: blocknetdx/raven:v4.3.2.1-staging
       config_mount_dir: /snode
       data_mount_dir: /snode
