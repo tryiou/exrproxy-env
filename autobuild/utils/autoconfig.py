@@ -26,7 +26,8 @@ def template_vars(template_path):
         contents = file.read()
         variables = jinja2schema.infer(contents)
         variables = jinja2schema.to_json_schema(variables)
-        variables['properties']['daemons']['items']['required'].remove('chainstate_mount_dir')
+        if 'chainstate_mount_dir' in variables['properties']['daemons']['items']['required']:
+	        variables['properties']['daemons']['items']['required'].remove('chainstate_mount_dir')
         #parse schema
         d = {}
         for req in variables['required']:
@@ -48,7 +49,7 @@ def load_template(template_url):
 			result = data.decode('utf-8')
 			return result
 		time.sleep(10)
-		
+
 def chain_lookup(s):
 	return "https://raw.githubusercontent.com/blocknetdx/blockchain-configuration-files/master/autobuild/configs/{}.base.j2".format(s.lower())
 
@@ -97,7 +98,7 @@ def generate_confs(blockchain, p2pport, rpcport, username, password, ip):
 		except urllib.error.HTTPError as e:
 			print("Config for currency {} not found".format(blockchain))
 			return ""
-		
+
 		xtemplate = Template(xbridge_text)
 		params = {}
 		if p2pport:
@@ -106,11 +107,11 @@ def generate_confs(blockchain, p2pport, rpcport, username, password, ip):
 			params['rpcPort'] = rpcport
 		xresult = xtemplate.render(rpcusername=rpcuser, rpcpassword=rpcpass, **params)
 		xbridge_json = json.loads(xresult)
-		
+
 		for sym in xbridge_json:
 			# if sym == 'BLOCK':
 			# 	continue
-			
+
 			xbridge_json[sym]['Ip'] = ip
 
 		# generate xbridge config
@@ -118,7 +119,7 @@ def generate_confs(blockchain, p2pport, rpcport, username, password, ip):
 		# f = open("xbridge.conf.j2", "r")
 		# xbridge_config = f.read()
 		xbridge_template = Template(xbridge_config)
-		
+
 		chain = list(xbridge_json.keys())[0]
 		xbridge_json[chain]['ticker'] = chain
 		return xbridge_template.render(list(xbridge_json.values())[0])
