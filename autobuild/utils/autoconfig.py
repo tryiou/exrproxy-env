@@ -101,6 +101,23 @@ def manifest_content(BASE_URL):
 def wallet_config(BASE_URL):
 	return BASE_URL + "/autobuild/templates/wallet.conf.j2"
 
+def wallet_conf_file(BASE_URL, wallet_conf_name):
+	return BASE_URL + "/wallet-confs/" + wallet_conf_name
+
+def parse_wallet_conf_lines(conf_text, skip_keys=None):
+	if skip_keys is None:
+		skip_keys = {'rpcuser', 'rpcpassword', 'rpcallowip'}
+	lines = []
+	for line in conf_text.splitlines():
+		stripped = line.strip()
+		if not stripped or stripped.startswith('#'):
+			continue
+		key = stripped.split('=')[0].strip()
+		if key in skip_keys:
+			continue
+		lines.append(stripped)
+	return '\n'.join(lines)
+
 def xbridge_config(BASE_URL):
 	return BASE_URL + "/autobuild/templates/xbridge.conf.j2"
 
