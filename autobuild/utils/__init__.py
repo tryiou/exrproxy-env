@@ -156,8 +156,13 @@ class Snode():
 					if _app.lower() == dir.lower():
 						found = dir
 						print(f'Found [bold cyan]{dir}[/bold cyan]')
-						proc = subprocess.check_output(f'echo {self.sudo_pass} | sudo -S du -k -d 0 {dirr}/{dir}',stdin=subprocess.PIPE, shell=True)
-						data = int(int(proc.decode('UTF-8').split('\t')[0]))
+						proc = subprocess.Popen(
+							['sudo', '-S', 'du', '-k', '-d', '0', f'{dirr}/{dir}'],
+							stdin=subprocess.PIPE,
+							stdout=subprocess.PIPE,
+							stderr=subprocess.PIPE
+						).communicate(input=f'{self.sudo_pass}\n'.encode())
+						data = int(int(proc[0].decode('UTF-8').split('\t')[0]))
 						exists = round(data/float(1<<20),2)
 						if dirr in self.dir_cache:
 							self.dir_cache[dirr] += exists

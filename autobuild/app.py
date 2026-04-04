@@ -26,6 +26,31 @@ OUTPUT_PATH = './'
 IPS_CACHE = '.cache_ip'
 UTXO_PLUGIN_METHODS = ['getutxos','getrawtransaction','getrawmempool','getblockcount','sendrawtransaction','gettransaction','getblock','getblockhash','heights','fees','getbalance','gethistory','ping']
 
+def _build_wallet_config(BRANCHPATH, daemon):
+	"""Build wallet config from chain-specific remote conf, falling back to generic template."""
+	if 'wallet_conf' in daemon:
+		try:
+			chain_conf_text = autoconfig.load_template(
+				autoconfig.wallet_conf_file(BRANCHPATH, daemon['wallet_conf'])
+			)
+			return autoconfig.parse_wallet_conf_lines(chain_conf_text)
+		except Exception:
+			print(f"Chain-specific wallet conf not found for {daemon['name']}, falling back to generic template")
+
+	generic_template = Template(autoconfig.load_template(autoconfig.wallet_config(BRANCHPATH)))
+	render_kwargs = {
+		'p2pPort': daemon['p2pPort'],
+		'rpcPort': daemon['rpcPort'],
+		'legacy': daemon['legacy'],
+		'deprecatedrpc': daemon['deprecatedrpc'],
+	}
+	if 'rpcserialversion' in daemon:
+		render_kwargs['rpcserialversion'] = daemon['rpcserialversion']
+	if 'testnet' in daemon:
+		render_kwargs['testnet'] = daemon['testnet']
+	return generic_template.render(**render_kwargs)
+
+
 def processcustom(customlist, SUBNET, BRANCHPATH):
 	if IPS_CACHE not in os.listdir(os.getcwd()):
 		write_text_file(IPS_CACHE,json.dumps({'ip':{}}, indent=4, sort_keys=False))
@@ -66,27 +91,22 @@ def processcustom(customlist, SUBNET, BRANCHPATH):
 					tag = c['daemons'][i]['image'].split(':')[1]
 					if '-staging' in tag:
 						tag = tag.split('-staging')[0]
-					if tag != 'latest':
-						c['daemons'][i]['deprecatedrpc'] = xbridge_json[name]['versions'][tag]['deprecatedrpc']
-						c['daemons'][i]['legacy'] = xbridge_json[name]['versions'][tag]['legacy']
-						if 'rpcserialversion' in xbridge_json[name]['versions'][tag]:
-							c['daemons'][i]['rpcserialversion'] = xbridge_json[name]['versions'][tag]['rpcserialversion']						
-						if 'testnet' in xbridge_json[name]['versions'][tag]: 
-							c['daemons'][i]['testnet'] = xbridge_json[name]['versions'][tag]['testnet']
-						else:
-							c['daemons'][i]['testnet'] = False
-					else:
+					if tag == 'latest':
 						version_list = list(xbridge_json[name]['versions'])
 						version_list.sort()
 						tag = version_list[-1]
-						c['daemons'][i]['deprecatedrpc'] = xbridge_json[name]['versions'][tag]['deprecatedrpc']
-						c['daemons'][i]['legacy'] = xbridge_json[name]['versions'][tag]['legacy']
-						if 'rpcserialversion' in xbridge_json[name]['versions'][tag]:
-							c['daemons'][i]['rpcserialversion'] = xbridge_json[name]['versions'][tag]['rpcserialversion']
-						if 'testnet' in xbridge_json[name]['versions'][tag]: 
-							c['daemons'][i]['testnet'] = xbridge_json[name]['versions'][tag]['testnet']
-						else:
-							c['daemons'][i]['testnet'] = False
+
+					version_data = xbridge_json[name]['versions'][tag]
+					c['daemons'][i]['deprecatedrpc'] = version_data['deprecatedrpc']
+					c['daemons'][i]['legacy'] = version_data['legacy']
+					if 'rpcserialversion' in version_data:
+						c['daemons'][i]['rpcserialversion'] = version_data['rpcserialversion']
+					if 'testnet' in version_data:
+						c['daemons'][i]['testnet'] = version_data['testnet']
+					else:
+						c['daemons'][i]['testnet'] = False
+					if 'wallet_conf' in version_data:
+						c['daemons'][i]['wallet_conf'] = version_data['wallet_conf']
 					if name in used_ip['ip'].keys():
 						c['daemons'][i]['ip'] = used_ip['ip'][name]
 					else:
@@ -330,13 +350,7 @@ def processconfigs(datalist, BRANCHPATH):
 			name = daemon['name']
 			if name.upper() not in ['TNODE', 'SNODE', 'TESTSNODE', 'TESTTNODE', 'ETH', 'XR_PROXY']:
 				XBRIDGE_CONF += "{},".format(name)
-				if 'rpcserialversion' in daemon:
-					template_wc = Template(autoconfig.load_template(autoconfig.wallet_config(BRANCHPATH))).render(
-                        			p2pPort=daemon['p2pPort'], rpcPort=daemon['rpcPort'], legacy=daemon['legacy'],
-                       				deprecatedrpc=daemon['deprecatedrpc'], rpcserialversion=daemon['rpcserialversion'], )
-				else:
-					template_wc = Template(autoconfig.load_template(autoconfig.wallet_config(BRANCHPATH))).render(
-                       				p2pPort=daemon['p2pPort'], rpcPort=daemon['rpcPort'], legacy=daemon['legacy'],deprecatedrpc=daemon['deprecatedrpc'], )
+				template_wc = _build_wallet_config(BRANCHPATH, daemon)
 				if name == 'SYS' and datalist[0]['deploy_nevm'] is True:
 					write_nevm = True
 					nevm_ip = datalist[0]['nevm_ip']
