@@ -64,7 +64,7 @@
 
 - name: DGB 
   type: chain
-  image: blocknetdx/digibyte:v7.17.2
+  image: blocknetdx/digibyte:latest
   volume: /snode
   disk: 34
   ram: 5
@@ -136,7 +136,7 @@
 
 - name: RVN 
   type: chain
-  image: blocknetdx/ravencoin:v4.3.2.1
+  image: blocknetdx/ravencoin:latest
   volume: /snode
   disk: 36
   ram: 5
@@ -160,7 +160,7 @@
 
 - name: UNO 
   type: chain
-  image: blocknetdx/unobtanium:v0.11.5
+  image: blocknetdx/unobtanium:latest
   volume: /snode
   disk: 5
   ram: 5
@@ -168,7 +168,7 @@
 
 - name: PKOIN 
   type: chain
-  image: blocknetdx/pocketnet:0.22.13-staging
+  image: blocknetdx/pocketcoin:latest
   volume: /snode
   disk: 5
   ram: 5
@@ -189,8 +189,6 @@
   exclude_chains: # The utxo-plugin module doesn't yet work for the following chains:
     - PHR
     - LBC
-    - RVN
-    - DGB
   volume: /snode
   disk: 200
   ram: 32

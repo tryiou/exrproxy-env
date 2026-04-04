@@ -37,7 +37,7 @@ hw_table.add_column('Free',justify='left', style='bold green', no_wrap=True)
 hw_table.add_column('%',justify='left', style='bold green', no_wrap=True)
 hw_table.add_row(app_title, 'CPU', str(psutil.cpu_count())) #CPU CORES
 hw_table.add_row('', 'RAM','{:.2f}GB'.format(round(virtual_memory['total']/ (1024.0 **3))),'{:.2f}GB'.format(round(virtual_memory['used']/ (1024.0 **3))),'{:.2f}%'.format(virtual_memory['used%']),'{:.2f}GB'.format(round(virtual_memory['free']/ (1024.0 **3))),'{:.2f}%'.format(virtual_memory['free%']))
-for mount_point in [x.mountpoint for x in psutil.disk_partitions(all=False)]:
+for mount_point in [x.mountpoint for x in psutil.disk_partitions(all=False) if not x.mountpoint.startswith('/snap/')]:
 	hw_table.add_row(mount_point, 'DISK', '{:.2f}GB'.format(psutil.disk_usage(mount_point).total / (2**30)), '{:.2f}GB'.format(psutil.disk_usage(mount_point).used / (2**30)),'{:.2f}%'.format(psutil.disk_usage(mount_point).percent),'{:.2f}GB'.format(psutil.disk_usage(mount_point).free / (2**30)),'{:.2f}%'.format(100-psutil.disk_usage(mount_point).percent))
 
 # CLI arguments
