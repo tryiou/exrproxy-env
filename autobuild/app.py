@@ -97,7 +97,7 @@ def processcustom(customlist, SUBNET, BRANCHPATH):
 						tag = version_list[-1]
 
 					version_data = xbridge_json[name]['versions'][tag]
-					c['daemons'][i]['deprecatedrpc'] = version_data['deprecatedrpc']
+					c['daemons'][i]['deprecatedrpc'] = version_data.get('deprecatedrpc', False)
 					c['daemons'][i]['legacy'] = version_data['legacy']
 					if 'rpcserialversion' in version_data:
 						c['daemons'][i]['rpcserialversion'] = version_data['rpcserialversion']

@@ -13,10 +13,10 @@ import dotenv
 import socket
 import psutil
 import pathlib
+import shutil
 import re
 from packaging import version
-from PyInquirer import style_from_dict, Token
-from PyInquirer.prompt import prompt
+from questionary import Style, Choice, checkbox, confirm, text, password, select
 
 input_template = [{
 	'daemons': []
@@ -36,69 +36,58 @@ input_template_args = [{
 
 class Inquirer():
 	def __init__(self):
-		self.style = style_from_dict({
-			Token.Separator: '#cc5454 bold',
-			Token.QuestionMark: '#cc5454 bold',
-			Token.Selected: '#00ff00 bold',
-			Token.Pointer: '#673ab7 bold',
-			Token.Instruction: '#808080 bold',
-			Token.Answer: '#f44336 bold',
-			Token.Question: '#00ff00 bold'
+		self.style = Style.from_dict({
+			'separator': '#cc5454 bold',
+			'questionmark': '#cc5454 bold',
+			'selected': '#00ff00 bold',
+			'pointer': '#673ab7 bold',
+			'instruction': '#808080 bold',
+			'answer': '#f44336 bold',
+			'question': '#00ff00 bold'
 		})
 
 	def pick_checkbox(self,ask,choices):
-		que = [
-			{
-				'type': 'checkbox',
-				'message': ask,
-				'name': 'input',
-				'choices': choices,
-			}]
-		answer = prompt(que, style=self.style)
-		answer = answer['input']
+		answer = checkbox(
+			ask,
+			choices=[Choice(title=c['name'], checked=c.get('checked', False)) for c in choices],
+			style=self.style
+		).ask()
 		return answer
 
 	def ask_question(self,ask, default=True):
-		que = [
-			{
-				'type': 'confirm',
-				'message': ask,
-				'name': 'input',
-				'default': default,
-			}]
-		answer = prompt(que, style=self.style)
-		return answer['input']
+		answer = confirm(ask, default=default, style=self.style).ask()
+		return answer
 
 	def get_input(self,ask):
-		que = [
-				{
-					'type': 'input',
-					'name': 'input',
-					'message': ask,
-				}]
-		answer = prompt(que, style=self.style)
-		return answer['input']
-	
+		answer = text(ask, style=self.style).ask()
+		return answer
+
 	def get_password(self,ask):
-		que = [
-				{
-					'type': 'password',
-					'name': 'input',
-					'message': ask,
-				}]
-		answer = prompt(que, style=self.style)
-		return answer['input']
+		answer = password(ask, style=self.style).ask()
+		return answer
 
 	def pick_one(self, ask, choices):
-		que = [
-				{
-					'type': 'list',
-					'name': 'input',
-					'message': ask,
-					'choices': choices
-				}]
-		answer = prompt(que, style=self.style)
-		return answer['input']
+		answer = select(ask, choices=choices, style=self.style).ask()
+		return answer
+
+def resolve_compose():
+    """Return (cmd, version_str) for the docker compose v2 plugin or docker-compose (v1/v2), or (None, None)."""
+    try:
+        proc = subprocess.check_output('docker compose version', shell=True).decode('UTF-8')
+        m = re.search(r"\d+[.]\d+[.]*\d*", proc)
+        if m:
+            return ('docker compose', m.group())
+    except Exception:
+        pass
+    if shutil.which('docker-compose'):
+        try:
+            proc = subprocess.check_output('docker-compose version', shell=True).decode('UTF-8')
+            m = re.search(r"\d+[.]\d+[.]*\d*", proc)
+            if m:
+                return ('docker-compose', m.group())
+        except Exception:
+            pass
+    return (None, None)
 
 class Snode():
 	def __init__(self, dirname, envfile):
@@ -228,7 +217,7 @@ class Snode():
 		output = stream.read()
 		if 'docker' not in output:
 			print("[bold cyan]Docker not installed[/bold cyan]")
-			print("[bold red]Install Docker Engine version v20.10.13, Docker Compose version v2.3.3 or latest.[/bold red]") # Please update via:
+			print("[bold red]Install Docker Engine version v20.10.13 or latest.[/bold red]") # Please update via:
 			sys.exit(0)
 			# self.install_docker()
 		elif 'docker' in output:
@@ -241,22 +230,12 @@ class Snode():
 				sys.exit(0)				
 			else:
 				print(f"[bold cyan]Docker Engine version {d_version}[/bold cyan]")
-				stream = os.popen("which docker-compose")
-				output = stream.read()
-				if 'docker-compose' not in output:
+				compose_cmd, compose_ver = resolve_compose()
+				if compose_cmd is None:
 					print("[bold cyan]Docker Compose not installed\nPlease install docker, docker-compose or start the daemon to continue...[/bold cyan]")
 					sys.exit(0)
-				elif 'docker-compose' in output:
-					proc = subprocess.check_output('docker-compose --version',stdin=subprocess.PIPE, shell=True).decode('UTF-8')
-					dc_version = version.parse(re.search(r"\d+[.]\d+[.]*\d*", proc).group())
-					if dc_version < version.parse("2.3.3"):
-						print("[bold red]Docker Compose version lower than v2.3.3. Update to continue[/bold red]") #Please update via:
-						# print("[bold cyan]docker-compose down[/bold cyan]")
-						# print("[bold cyan]./exr_env.sh --undocker[/bold cyan]")
-						# print("[bold cyan]./exr_env.sh --docker[/bold cyan]")
-						sys.exit(0)
-					else:
-						print(f"[bold cyan]docker-compose v{dc_version}[/bold cyan]")
+				dc_version = version.parse(compose_ver)
+				print(f"[bold cyan]{compose_cmd} v{dc_version}[/bold cyan]")
 
 	# def install_docker(self):
 	# 	answer = self.inquirer.ask_question("Do you want to install docker?")
@@ -289,7 +268,11 @@ class Snode():
 
 	def stop_containers(self):
 		print(f"Stopping [bold cyan]{self.dirname}[/bold cyan] containers")
-		exit_code = subprocess.call("docker-compose down", shell=True)
+		compose_cmd, _ = resolve_compose()
+		if compose_cmd is None:
+			print("[bold red]Docker Compose not installed[/bold red]")
+			sys.exit(1)
+		exit_code = subprocess.call(f"{compose_cmd} down", shell=True)
 		# Error if exit_code not 0
 		if exit_code != 0:
 			print("An error occurred while stopping running containers.")

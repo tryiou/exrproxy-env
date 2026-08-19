@@ -83,14 +83,20 @@ def random_ip(subnet):
   return(random.choice(all_ips))
 
 def load_template(template_url):
-  # load_template - downloads from url provided and returns the data
-  while True:
-    response = urllib.request.urlopen(template_url)
-    if response.getcode() == 200:
-      data = response.read()
-      result = data.decode('utf-8')
-      return result
-    time.sleep(10)
+  # load_template - loads from a local path, file:// URL or http(s):// URL and returns the data
+  if template_url.startswith(('http://', 'https://')):
+    while True:
+      response = urllib.request.urlopen(template_url)
+      if response.getcode() == 200:
+        data = response.read()
+        result = data.decode('utf-8')
+        return result
+      time.sleep(10)
+  local_path = template_url
+  if local_path.startswith('file://'):
+    local_path = urllib.request.url2pathname(local_path[len('file://'):])
+  with open(local_path, 'r') as file:
+    return file.read()
     
 def chain_lookup(BASE_URL, s):
 	return BASE_URL + "/autobuild/configs/{}.base.j2".format(s.lower())
@@ -157,7 +163,7 @@ def generate_confs(BASE_URL, blockchain, p2pport, rpcport, username, password, i
     # find the URL for the chain
     try:
       xbridge_text = load_template(chain_lookup(BASE_URL, blockchain))
-    except urllib.error.HTTPError as e:
+    except (urllib.error.HTTPError, OSError) as e:
       print("Config for currency {} not found".format(blockchain))
       return ""
     

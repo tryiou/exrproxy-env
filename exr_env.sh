@@ -119,18 +119,6 @@ fi
 ############################################################
 function installpythonrequirements() {
 	pip3 install -r requirements.txt
-
-	# Fix prompt_toolkit/styles/from_dict.py lib if it's broken
-	pkgs=$(python3 -m site | awk -F"'" '/site-packages/{print $2; exit}')
-	echo "Searching $pkgs for broken lib file..."
-	broken_lib=${pkgs}/prompt_toolkit/styles/from_dict.py
-	if grep -q "from collections import Mapping" ${broken_lib}; then
-		echo "prompt_toolkit/styles/from_dict.py contains broken lib ref; fixing it..."
-		cp ${broken_lib} ${broken_lib}.bak
-		awk '/from collections import Mapping/{gsub(/collections/, "collections.abc")};{print}' ${broken_lib}.bak > ${broken_lib}
-	else
-		echo "prompt_toolkit/styles/from_dict.py doesn't exist or isn't broken; skipping fixing it..."
-	fi
 }
 
 ############################################################
@@ -165,8 +153,7 @@ function checkdocker() {
 	DOCKER=$(which docker)
 	if grep -q "/" <<< "$DOCKER"; then
 		printf "%s\n\033[92;1mDocker found\033[0m"
-		DOCKER_VERSION=$(docker --version | awk '{print $3}')
-		DOCKER_VERSION={{$DOCKER_VERSION::-1}}
+		DOCKER_VERSION=$(docker --version | awk '{print $3}' | sed 's/,$//')
 		if [ "$(printf '%s\n' "$dockerversion" "$DOCKER_VERSION" | sort --version-sort | head -n1)" = "$dockerversion" ]; then 
 			printf "%s\n\033[92;1mGreater than or equal to ${dockerversion}\033[0m"
 		else
@@ -181,16 +168,13 @@ function checkdocker() {
 # Check Docker Compose                                     #
 ############################################################
 function checkdockercompose() {
-	composeversion="2.3.3"
-	COMPOSE=$(which docker-compose)
-	if grep -q "/" <<< "$COMPOSE"; then
-		printf "%s\n\033[92;1mDocker Compose found\033[0m"
-		COMPOSE_VERSION=$(docker-compose --version | awk -F'v' '{print $3}')
-		if [ "$(printf '%s\n' "$composeversion" "$COMPOSE_VERSION" | sort --version-sort | head -n1)" = "$composeversion" ]; then 
-			printf "%s\n\033[92;1mGreater than or equal to ${composeversion}\033[0m"
-		else
-			printf "%s\n\033[91;1mLess than ${composeversion}. You have to upgrade\033[0m"
-		fi
+	if docker compose version >/dev/null 2>&1; then
+		COMPOSE_VERSION=$(docker compose version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+	elif command -v docker-compose >/dev/null 2>&1; then
+		COMPOSE_VERSION=$(docker-compose version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+	fi
+	if [ -n "$COMPOSE_VERSION" ]; then
+		printf "%s\n\033[92;1mDocker Compose found: ${COMPOSE_VERSION}\033[0m"
 	else
 		printf "%s\n\033[91;1mDocker Compose not found\033[0m"
 	fi
