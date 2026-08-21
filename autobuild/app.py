@@ -26,6 +26,11 @@ OUTPUT_PATH = './'
 IPS_CACHE = '.cache_ip'
 UTXO_PLUGIN_METHODS = ['getutxos','getrawtransaction','getrawmempool','getblockcount','sendrawtransaction','gettransaction','getblock','getblockhash','heights','fees','getbalance','gethistory','ping']
 
+# lbcd/lbcwallet (btcd-family) expose the node's internal RPC 10000 ports above
+# the wallet facade's legacy RPC port. This is an lbcd/lbcwallet-specific
+# offset, NOT the vanilla btcd convention (which uses +2).
+BTCD_NODE_RPC_PORT_OFFSET = 10000
+
 def _build_wallet_config(BRANCHPATH, daemon):
 	"""Build wallet config from chain-specific remote conf, falling back to generic template."""
 	if 'wallet_conf' in daemon:
@@ -61,6 +66,8 @@ def processcustom(customlist, SUBNET, BRANCHPATH):
 	daemons_list = []
 	configFiles = {}
 	binFiles = {}
+	daemonFamily = {}
+	daemonStem = {}
 	rpc_threads = 0
 	manifest_config = autoconfig.load_template(autoconfig.manifest_content(BRANCHPATH))
 	manifest = json.loads(Template(manifest_config).render())
@@ -70,6 +77,9 @@ def processcustom(customlist, SUBNET, BRANCHPATH):
 			binFiles[blockchain['ticker']] = blockchain['daemon_stem'] + 'd'
 		else:
 			binFiles[blockchain['ticker']] = blockchain['conf_name'].split('.conf')[0] + 'd'
+		daemonFamily[blockchain['ticker']] = blockchain.get('daemon_family')
+		daemonStem[blockchain['ticker']] = blockchain.get('daemon_stem',
+		                                                  blockchain['conf_name'].split('.conf')[0])
 
 	customlist[0]['deploy_nevm'] = False
 	for c in customlist:
@@ -87,6 +97,8 @@ def processcustom(customlist, SUBNET, BRANCHPATH):
 					c['daemons'][i]['p2pPort'] = xbridge_json[name]['p2pPort']
 					c['daemons'][i]['rpcPort'] = xbridge_json[name]['rpcPort']
 					c['daemons'][i]['binFile'] = binFiles[name]
+					c['daemons'][i]['daemon_family'] = daemonFamily.get(name)
+					c['daemons'][i]['daemon_stem'] = daemonStem.get(name)
 					c['daemons'][i]['configName'] = configFiles[name].split('.conf')[0]
 					tag = c['daemons'][i]['image'].split(':')[1]
 					if '-staging' in tag:
@@ -357,15 +369,30 @@ def processconfigs(datalist, BRANCHPATH):
 				else:	 
 					write_nevm = False
 					nevm_ip = '0.0.0.0'
-				rendered_data_ec = custom_template_ec.render({'walletConfig': template_wc,
-															  'configName': daemon['configName'],
-															  'writeNEVM': write_nevm,
-															  'nevmIP': nevm_ip})
-				config_name = './scripts/entrypoints/start-{}.sh'.format(daemon['configName'])
-				print('Creating File: {}'.format(config_name))
-				autoconfig.save_config(rendered_data_ec, config_name)
-				st = os.stat(config_name)
-				os.chmod(config_name, st.st_mode | stat.S_IEXEC)
+			# btcd-family daemons (lbcd/lbcwallet) expose three distinct ports.
+			# The proxy talks to the wallet facade's legacy RPC; the node's
+			# internal RPC is localhost-only and sits BTCD_NODE_RPC_PORT_OFFSET
+			# (10000) ports above the wallet RPC port.
+			wallet_rpc_port = int(daemon.get('rpcPort', 9245))
+			node_p2p_port = int(daemon.get('p2pPort', 9246))
+			node_rpc_port = wallet_rpc_port + BTCD_NODE_RPC_PORT_OFFSET
+
+			rendered_data_ec = custom_template_ec.render({
+				'walletConfig': template_wc,
+				'config_name': daemon['configName'],
+				'daemon_stem': daemon.get('daemon_stem'),
+				'writeNEVM': write_nevm,
+				'nevmIP': nevm_ip,
+				'daemon_family': daemon.get('daemon_family'),
+				'node_p2p_port': node_p2p_port,
+				'wallet_rpc_port': wallet_rpc_port,
+				'node_rpc_port': node_rpc_port,
+				})
+			config_name = './scripts/entrypoints/start-{}.sh'.format(daemon['configName'])
+			print('Creating File: {}'.format(config_name))
+			autoconfig.save_config(rendered_data_ec, config_name)
+			st = os.stat(config_name)
+			os.chmod(config_name, st.st_mode | stat.S_IEXEC)
 
 	XBRIDGE_CONF = XBRIDGE_CONF[:-1]
 	XBRIDGE_CONF += '\n\n'

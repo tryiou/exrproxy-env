@@ -96,7 +96,7 @@
 
 - name: LBC 
   type: chain
-  image: blocknetdx/lbrycredits:v0.17.4.6
+  image: blocknetdx/lbry-credits:latest
   volume: /snode
   disk: 160
   ram: 5

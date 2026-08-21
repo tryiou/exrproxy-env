@@ -1,8 +1,9 @@
 #!/bin/sh
 
-cat > /opt/blockchain/config/{{ configName }}.conf << EOL
+{% if daemon_family is not defined or daemon_family != 'btcd' %}
+cat > /opt/blockchain/config/{{ config_name }}.conf << EOL
 datadir=/opt/blockchain/data
-{% if configName == 'unobtanium' %}
+{% if config_name == 'unobtanium' %}
 # uno daemon need '-reindex' launch option for first launch.
 rpcthreads=8
 {% endif %}
@@ -38,4 +39,32 @@ gethcommandline=--graphql.vhosts=*
 EOL
 
 # ensure docker runs daemon as pid1
-exec $1 -conf=/opt/blockchain/config/{{ configName }}.conf
+exec $1 -conf=/opt/blockchain/config/{{ config_name }}.conf
+{% else %}
+{# btcd-family: define the Go-format runtime config (ports + rpc) in the
+   entrypoint — the same responsibility the non-btcd branches have — then hand
+   off to the image-baked launcher, which brings up the node + wallet facade. #}
+cat > /opt/blockchain/config/{{ config_name }}.conf << EOL
+datadir=/opt/blockchain/data
+rpcuser=${RPC_USER}
+rpcpass=${RPC_PASSWORD}
+rpclisten=127.0.0.1:{{ node_rpc_port }}
+notls=1
+listen=0.0.0.0:{{ node_p2p_port }}
+txindex=1
+maxpeers=16
+EOL
+
+cat > /opt/blockchain/config/{{ daemon_stem }}wallet.conf << EOL
+appdata=/opt/blockchain/data
+rpcconnect=127.0.0.1:{{ node_rpc_port }}
+noclienttls=1
+noservertls=1
+rpclisten=0.0.0.0:{{ wallet_rpc_port }}
+rpcuser=${RPC_USER}
+rpcpass=${RPC_PASSWORD}
+passphrase=${RPC_PASSWORD}
+EOL
+
+exec /opt/blockchain/start.sh
+{% endif %}
