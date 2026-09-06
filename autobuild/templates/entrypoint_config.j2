@@ -38,8 +38,28 @@ gethcommandline=--graphql.vhosts=*
 
 EOL
 
+{% if coin_params.launch_flags or coin_params.addnodes or coin_params.file_logging %}
+# Runtime needs declared at image build (coin-params.sh inside the image):
+# launch flags, bootstrap peers and file-log mirroring are rendered here as
+# literal lines — no reader scaffolding, no per-coin branches. Coins without
+# params render none of this (byte-identical to the historical script).
+{% for _node in coin_params.addnodes %}
+echo "addnode={{ _node }}" >> /opt/blockchain/config/{{ config_name }}.conf
+{% endfor %}
+{% if coin_params.file_logging %}
+{% if coin_params.tail_filter %}
+tail -F /opt/blockchain/data/debug.log | grep --line-buffered -vE -- '{{ coin_params.tail_filter }}' &
+{% else %}
+tail -F /opt/blockchain/data/debug.log &
+{% endif %}
+{% endif %}
+# ensure docker runs daemon as pid1
+# launch_flags suppressed when NEVM is enabled: an image off-switch would kill bundled SysGeth.
+exec $1 -conf=/opt/blockchain/config/{{ config_name }}.conf{% if coin_params.launch_flags and not writeNEVM %} {{ coin_params.launch_flags }}{% endif %}
+{% else %}
 # ensure docker runs daemon as pid1
 exec $1 -conf=/opt/blockchain/config/{{ config_name }}.conf
+{% endif %}
 {% else %}
 {# btcd-family: define the Go-format runtime config (ports + rpc) in the
    entrypoint — the same responsibility the non-btcd branches have — then hand

@@ -4,6 +4,7 @@ import stat
 import json
 import re
 import ipaddress
+import subprocess
 from jinja2 import Environment, FileSystemLoader, Template, BaseLoader
 from autobuild.utils.autoconfig import *
 import autobuild.utils.autoconfig as autoconfig
@@ -31,29 +32,84 @@ UTXO_PLUGIN_METHODS = ['getutxos','getrawtransaction','getrawmempool','getblockc
 # offset, NOT the vanilla btcd convention (which uses +2).
 BTCD_NODE_RPC_PORT_OFFSET = 10000
 
-def _build_wallet_config(BRANCHPATH, daemon):
-	"""Build wallet config from chain-specific remote conf, falling back to generic template."""
-	if 'wallet_conf' in daemon:
-		try:
-			chain_conf_text = autoconfig.load_template(
-				autoconfig.wallet_conf_file(BRANCHPATH, daemon['wallet_conf'])
-			)
-			return autoconfig.parse_wallet_conf_lines(chain_conf_text)
-		except Exception:
-			print(f"Chain-specific wallet conf not found for {daemon['name']}, falling back to generic template")
+def _version_key(tag):
+	"""Natural sort key for version tags, so 'v0.21.5.13' > 'v0.21.5.4'."""
+	return tuple(int(n) for n in re.findall(r'\d+', tag))
 
-	generic_template = Template(autoconfig.load_template(autoconfig.wallet_config(BRANCHPATH)))
-	render_kwargs = {
-		'p2pPort': daemon['p2pPort'],
-		'rpcPort': daemon['rpcPort'],
-		'legacy': daemon['legacy'],
-		'deprecatedrpc': daemon['deprecatedrpc'],
-	}
-	if 'rpcserialversion' in daemon:
-		render_kwargs['rpcserialversion'] = daemon['rpcserialversion']
-	if 'testnet' in daemon:
-		render_kwargs['testnet'] = daemon['testnet']
-	return generic_template.render(**render_kwargs)
+def _build_wallet_config(BRANCHPATH, daemon):
+	"""Build sanitized wallet config lines from the chain-specific conf.
+
+	Raises RuntimeError if the conf is missing or unreadable: every daemon
+	that reaches the render stage carries 'wallet_conf' from manifest data
+	(unresolvable daemons are dropped earlier), so an unloadable conf is a
+	broken deploy, never a case for a degraded generic fallback (which
+	previously emitted empty rpcuser/rpcpassword below the entrypoint's
+	own credentials).
+	"""
+	if 'wallet_conf' not in daemon:
+		raise RuntimeError(
+			"daemon '{}' has no wallet_conf; refusing to render entrypoint".format(
+				daemon.get('name', '?')))
+	conf_path = autoconfig.wallet_conf_file(BRANCHPATH, daemon['wallet_conf'])
+	try:
+		chain_conf_text = autoconfig.load_template(conf_path)
+	except Exception as e:
+		raise RuntimeError(
+			"wallet conf for '{}' not loadable from {}: {}".format(
+				daemon.get('name', '?'), conf_path, e))
+	return autoconfig.parse_wallet_conf_lines(chain_conf_text)
+
+
+def _is_sys(name):
+	"""The SYS daemon, case-insensitively (daemon names are upper-cased
+	elsewhere, but YAML input is free-form)."""
+	return isinstance(name, str) and name.upper() == 'SYS'
+
+
+def _coin_params(image, timeout=60):
+	"""Runtime params declared at image build (coin-params.sh content).
+
+	Returns a dict {launch_flags, addnodes, file_logging, tail_filter};
+	empty dict when the image is absent locally (normal render-then-pull
+	flow, all Hub images), docker is missing, or anything fails — which
+	renders today's exact scripts (graceful fallback). Values are parsed,
+	never sourced: strict VAR="value" lines only.
+	"""
+	empty = {'launch_flags': '', 'addnodes': [],
+	         'file_logging': False, 'tail_filter': ''}
+	if not image:
+		return empty
+	try:
+		present = subprocess.run(
+			["docker", "image", "inspect", image],
+			capture_output=True, timeout=timeout)
+		if present.returncode != 0:
+			return empty
+		proc = subprocess.run(
+			["docker", "run", "--rm", "--entrypoint", "cat", image,
+			 "/opt/blockchain/coin-params.sh"],
+			capture_output=True, text=True, timeout=timeout)
+	except (OSError, subprocess.TimeoutExpired):
+		return empty
+	if proc.returncode != 0:
+		return empty
+	vals = {}
+	for line in (proc.stdout or "").splitlines():
+		m = re.match(r'^([A-Z_]+)="([^"]*)"$', line.strip())
+		if m:
+			vals[m.group(1)] = m.group(2)
+	parsed = {'launch_flags': vals.get('LAUNCH_FLAGS', ''),
+	          'addnodes': vals.get('ADDNODES', '').split(),
+	          'file_logging': vals.get('FILE_LOGGING', '') == '1',
+	          'tail_filter': vals.get('TAIL_FILTER', '')}
+	for token in parsed['launch_flags'].split() + parsed['addnodes']:
+		if re.search(r'[^A-Za-z0-9_.:=-]', token):
+			print("coin-params from '%s' has an unsafe token %r; ignoring all params" % (image, token))
+			return empty
+	if "'" in parsed['tail_filter']:
+		print("coin-params from '%s' has a quoted tail filter; ignoring all params" % image)
+		return empty
+	return parsed
 
 
 def processcustom(customlist, SUBNET, BRANCHPATH):
@@ -81,8 +137,20 @@ def processcustom(customlist, SUBNET, BRANCHPATH):
 		daemonStem[blockchain['ticker']] = blockchain.get('daemon_stem',
 		                                                  blockchain['conf_name'].split('.conf')[0])
 
+	# conf_name is shared by a few mainnet/testnet + fork pairs (BTC/BCH,
+	# BLOCK/TBLOCK, SYS/TSYS) whose daemon binaries genuinely share the
+	# family name. Entrypoint script paths must still be unique per
+	# deployed coin, so holders after the first-in-manifest one get a
+	# ticker suffix in configName only. Binaries, image conf names and
+	# xbridge sections are intentionally left alone.
+	_first_conf_holder = {}
+	for blockchain in manifest:
+		_first_conf_holder.setdefault(blockchain['conf_name'], blockchain['ticker'])
+
 	customlist[0]['deploy_nevm'] = False
 	for c in customlist:
+		miss_index = []
+		miss_names = []
 		for i in range(len(c['daemons'])):
 			name = c['daemons'][i]['name']
 			type = c['daemons'][i]['type']
@@ -99,13 +167,16 @@ def processcustom(customlist, SUBNET, BRANCHPATH):
 					c['daemons'][i]['binFile'] = binFiles[name]
 					c['daemons'][i]['daemon_family'] = daemonFamily.get(name)
 					c['daemons'][i]['daemon_stem'] = daemonStem.get(name)
-					c['daemons'][i]['configName'] = configFiles[name].split('.conf')[0]
+					conf_stem = configFiles[name].split('.conf')[0]
+					if name != _first_conf_holder[configFiles[name]]:
+						conf_stem = '{}-{}'.format(conf_stem, name.lower())
+					c['daemons'][i]['configName'] = conf_stem
 					tag = c['daemons'][i]['image'].split(':')[1]
 					if '-staging' in tag:
 						tag = tag.split('-staging')[0]
 					if tag == 'latest':
 						version_list = list(xbridge_json[name]['versions'])
-						version_list.sort()
+						version_list.sort(key=_version_key)
 						tag = version_list[-1]
 
 					version_data = xbridge_json[name]['versions'][tag]
@@ -128,13 +199,14 @@ def processcustom(customlist, SUBNET, BRANCHPATH):
 								c['daemons'][i]['ip'] = custom_ip
 								used_ip['ip'][name] = custom_ip
 								break
-					if name == 'SYS':
+					if _is_sys(name):
 						nevm_ip = c['daemons'][i]['ip']
 					daemons_list.append(name.upper())
 					rpc_threads += 1
 				except Exception as e:
 					print("Config for currency {} not found. The error is {}".format(name, e))
-					del c['daemons'][i]
+					miss_index.append(i)
+					miss_names.append(name)
 			else:
 				#others configs
 				to_del_index.append(i)
@@ -291,6 +363,14 @@ def processcustom(customlist, SUBNET, BRANCHPATH):
 						mount_dir = f'{name.lower()}_{j}'
 						customlist[0][mount_dir] = os.environ.get(mount_dir.upper(),c['daemons'][i][j])
 
+		# drop daemons whose manifest lookup failed (reverse order keeps indices valid)
+		for i in sorted(miss_index, reverse=True):
+			del c['daemons'][i]
+		if miss_names:
+			raise RuntimeError(
+				"no manifest data for daemon(s) {}; refusing to render a partial stack".format(
+					", ".join(miss_names)))
+
 		write_text_file(IPS_CACHE,json.dumps(used_ip, indent=4, sort_keys=False))
 		#check for missed configs
 		#loading template vars
@@ -353,7 +433,8 @@ def processconfigs(datalist, BRANCHPATH):
 	else:
 		base_block = 'TBLOCK'
 
-	XBRIDGE_CONF = "[Main]\nFullLog=true\nLogPath=\nExchangeTax=300\nExchangeWallets="+base_block+","
+	XBRIDGE_CONF = "[Main]\nFullLog=true\nLogPath=\nExchangeTax=300\nExchangeWallets="
+	xr_wallet_tokens = [base_block]
 
 	custom_template_ec = J2_ENV.get_template('autobuild/templates/entrypoint_config.j2')
 
@@ -361,9 +442,9 @@ def processconfigs(datalist, BRANCHPATH):
 		for daemon in data['daemons']:
 			name = daemon['name']
 			if name.upper() not in ['TNODE', 'SNODE', 'TESTSNODE', 'TESTTNODE', 'ETH', 'XR_PROXY']:
-				XBRIDGE_CONF += "{},".format(name)
+				xr_wallet_tokens.append(name.upper())
 				template_wc = _build_wallet_config(BRANCHPATH, daemon)
-				if name == 'SYS' and datalist[0]['deploy_nevm'] is True:
+				if _is_sys(name) and datalist[0]['deploy_nevm'] is True:
 					write_nevm = True
 					nevm_ip = datalist[0]['nevm_ip']
 				else:	 
@@ -387,6 +468,7 @@ def processconfigs(datalist, BRANCHPATH):
 				'node_p2p_port': node_p2p_port,
 				'wallet_rpc_port': wallet_rpc_port,
 				'node_rpc_port': node_rpc_port,
+				'coin_params': _coin_params(daemon.get('image', '')),
 				})
 			config_name = './scripts/entrypoints/start-{}.sh'.format(daemon['configName'])
 			print('Creating File: {}'.format(config_name))
@@ -394,10 +476,10 @@ def processconfigs(datalist, BRANCHPATH):
 			st = os.stat(config_name)
 			os.chmod(config_name, st.st_mode | stat.S_IEXEC)
 
-	XBRIDGE_CONF = XBRIDGE_CONF[:-1]
+	XBRIDGE_CONF += ",".join(dict.fromkeys(xr_wallet_tokens))
 	XBRIDGE_CONF += '\n\n'
 
-	XR_TOKENS = base_block
+	xr_router_tokens = [base_block]
 	for data in datalist:
 		p2pport = ''
 		rpcport = ''
@@ -407,13 +489,24 @@ def processconfigs(datalist, BRANCHPATH):
 			name = daemon['name']
 			ip = daemon['ip']
 			if name.upper() not in ['TNODE', 'SNODE', 'TESTSNODE', 'TESTTNODE', 'ETH', 'XR_PROXY']:
-				XR_TOKENS += ','+name.upper()
-				XBRIDGE_CONF += "{}\n\n".format(autoconfig.generate_confs(BRANCHPATH, name, p2pport, rpcport, username, password, ip))
-				print('Add Xbridge: {}'.format(name))
+				xr_router_tokens.append(name.upper())
+				if name.upper() == base_block:
+					# The base chain is always served by the node itself
+					# (snode serves BLOCK, tnode serves TBLOCK); its
+					# section is emitted once by the base append below.
+					# Emitting a wallet section too produces a duplicate
+					# section name, which the XBridge loader rejects —
+					# blanking the whole wallet config (no connectors,
+					# empty dxgetlocaltokens).
+					print('Skip Xbridge (served by node): {}'.format(name))
+				else:
+					XBRIDGE_CONF += "{}\n\n".format(autoconfig.generate_confs(BRANCHPATH, name, p2pport, rpcport, username, password, ip))
+					print('Add Xbridge: {}'.format(name))
 		# Add BLOCK settings
 		XBRIDGE_CONF += "{}\n\n".format(autoconfig.generate_confs(BRANCHPATH, base_block, p2pport, rpcport, username, password, '127.0.0.1'))
 
 	autoconfig.save_config(XBRIDGE_CONF, os.path.join('./scripts/config', 'xbridge.conf'))
+	XR_TOKENS = ",".join(dict.fromkeys(xr_router_tokens))
 	custom_template_xr = J2_ENV.get_template('autobuild/templates/xrouter.j2')
 	XROUTER_CONF = custom_template_xr.render({'XR_TOKENS': XR_TOKENS, 'xrouter_plugins': datalist[0]['xrouter_plugins']})
 
