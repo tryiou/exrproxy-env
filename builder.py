@@ -112,10 +112,12 @@ if 'payment_xquery' not in cache:
 if __name__ == '__main__':
 	print(hw_table)
 	print()
-	# Create Snode instance
-	snode = Snode(dirname, ENV_FILE)
-
+	# Create Snode instance inside try so handler paths below can never
+	# reference it unbound (a construction failure must surface itself,
+	# not a NameError masking it).
+	snode = None
 	try:
+		snode = Snode(dirname, ENV_FILE)
 		# Prune docker and exit
 		if PRUNE:
 			print(f"[bold magenta]{'-'*50}[/bold magenta]")
@@ -356,7 +358,7 @@ if __name__ == '__main__':
 			input_template = load_yaml_file(YAML)
 			if input_template == "ERROR":
 				print(f"Error loading {YAML}")
-				sys.exit(0)
+				sys.exit(1)
 
 		input_template_args[0]['daemons'] = input_template[0]['daemons']
 		input_template_args[0]['xquery_tag'] = XQUERYTAG
@@ -371,8 +373,16 @@ if __name__ == '__main__':
 		snode.atexit()
 	except Exception as e:
 		logging.critical('Exception:',exc_info=True)
-		snode.atexit()
+		# Exit non-zero so chained commands (e.g. builder && deploy) do not
+		# roll out a partial or stale configuration after a failed render.
+		if snode is not None:
+			snode.atexit(1)
+		else:
+			sys.exit(1)
 	except KeyboardInterrupt:
-		snode.atexit()
+		if snode is not None:
+			snode.atexit(130)
+		else:
+			sys.exit(130)
 
 

@@ -104,13 +104,19 @@ def chain_lookup(BASE_URL, s):
 def manifest_content(BASE_URL):
 	return BASE_URL + '/manifest-latest.json'
 
-def wallet_config(BASE_URL):
-	return BASE_URL + "/autobuild/templates/wallet.conf.j2"
-
 def wallet_conf_file(BASE_URL, wallet_conf_name):
 	return BASE_URL + "/wallet-confs/" + wallet_conf_name
 
 def parse_wallet_conf_lines(conf_text, skip_keys=None):
+	"""Collapse a chain wallet conf to the lines the entrypoint embeds.
+
+	Drops blanks/comments and entrypoint-owned keys (rpcuser, rpcpassword,
+	rpcallowip — the entrypoint template sets those itself). Network
+	section headers ([test], [main], ...) pass through BY DESIGN: per Core
+	config semantics (doc/bitcoin-conf.md) network-bound keys such as
+	port/rpcport only apply to a non-mainnet chain from inside their
+	section — do not flatten them to top level.
+	"""
 	if skip_keys is None:
 		skip_keys = {'rpcuser', 'rpcpassword', 'rpcallowip'}
 	lines = []

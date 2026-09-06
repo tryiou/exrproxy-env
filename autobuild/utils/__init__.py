@@ -163,23 +163,32 @@ class Snode():
 			if app == 'TOTAL':
 				if directory_list[index] in self.dir_cache:
 					exists = self.dir_cache[directory_list[index]]
-			if gb-req_list[index]+exists <=0:
-				check = 'WARNING'
-				colour = 'red'
+			if req_list[index] <= 0:
+				# Unknown footprint (e.g. disk: 0 in sources.yaml): never
+				# silent-PASS a safety check that cannot fail. Visible,
+				# non-blocking; real requirements keep exact math.
+				check, colour = 'UNKNOWN', 'yellow'
+			elif gb-req_list[index]+exists <=0:
+				check, colour = 'WARNING', 'red'
 			else:
-				check = 'PASS'
-				colour = 'green'
-			table.add_row(app.ljust(8,' '), directory_list[index], f'[{colour}]{"{:.2f}".format(gb)} GB[/{colour}]',f'{req_list[index]} GB',found, f'{exists} GB',f'[bold {colour}]{check}[/bold {colour}]',f'[{colour}]{"{:.2f}".format(gb)}-({req_list[index]}-{exists}) = {"{:.2f}".format(gb-req_list[index]+exists)}[/{colour}] GB')
+				check, colour = 'PASS', 'green'
+			if check == 'UNKNOWN':
+				req_display = 'unknown'
+				calc_display = f'[{colour}]unknown requirement[/{colour}]'
+			else:
+				req_display = f'{req_list[index]} GB'
+				calc_display = f'[{colour}]{"{:.2f}".format(gb)}-({req_list[index]}-{exists}) = {"{:.2f}".format(gb-req_list[index]+exists)}[/{colour}] GB'
+			table.add_row(app.ljust(8,' '), directory_list[index], f'[{colour}]{"{:.2f}".format(gb)} GB[/{colour}]',req_display,found, f'{exists} GB',f'[bold {colour}]{check}[/bold {colour}]',calc_display)
 			if app == 'TOTAL' and check == 'WARNING':
 				print(f'[bold red]{"{:.2f}".format(gb-req_list[index]+exists)} GB more are required.\nYou might wanna change a {directory_list[index]} install location.[/bold red]')
 		subprocess.Popen(['sudo','-k'])
 		print(table)
 
-	def atexit(self):
+	def atexit(self, code=0):
 		if hasattr(self, 'client'):
 			self.client.close()
 		print("[bold red]Closing...[/bold red]")
-		sys.exit(0)
+		sys.exit(code)
 
 	def checks(self):
 		self.client = self.get_client()
