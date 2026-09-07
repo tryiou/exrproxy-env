@@ -46,11 +46,51 @@
   ram: 16
   cpu: 6
 
+- name: AGM
+  type: chain
+  image: blocknetdx/argoneum:latest
+  volume: /snode
+  disk: 0 # chain size unknown — update when measured
+  ram: 5
+  cpu: 4
+
+- name: BCH
+  type: chain
+  image: blocknetdx/bitcoin-cash:latest
+  volume: /snode
+  disk: 0 # chain size unknown — update when measured
+  ram: 5
+  cpu: 4
+
+- name: BLOCK
+  type: chain
+  image: blocknetdx/blocknet:latest
+  volume: /snode
+  disk: 0 # chain size unknown — update when measured
+  ram: 5
+  cpu: 4
+
 - name: BTC 
   type: chain
   image: blocknetdx/bitcoin:latest
   volume: /snode
   disk: 550
+  ram: 5
+  cpu: 4
+
+- name: BTX
+  type: chain
+  image: blocknetdx/bitcore:latest
+  volume: /snode
+  disk: 0 # chain size unknown — update when measured
+  ram: 5
+  cpu: 4
+
+- name: COLX
+  type: chain
+  image: blocknetdx/colossusxt:latest
+  volume: /snode
+  disk: 0 # chain size unknown — update when measured
   ram: 5
   cpu: 4
 
@@ -70,6 +110,14 @@
   ram: 5
   cpu: 4
 
+- name: DIVI
+  type: chain
+  image: blocknetdx/divi:latest
+  volume: /snode
+  disk: 0 # chain size unknown — update when measured
+  ram: 5
+  cpu: 4
+
 - name: DOGE 
   type: chain
   image: blocknetdx/dogecoin:latest
@@ -80,17 +128,49 @@
 
 - name: DOGEC 
   type: chain
-  image: blocknetdx/dogecash:5.4.4
+  image: blocknetdx/dogecash:latest
   volume: /snode
   disk: 4
   ram: 5
   cpu: 4
 
-- name: GBX 
+- name: EMC
   type: chain
-  image: blocknetdx/gobyte:v0.16.2.1
+  image: blocknetdx/emercoin:latest
   volume: /snode
-  disk: 3
+  disk: 0 # chain size unknown — update when measured
+  ram: 5
+  cpu: 4
+
+- name: FIRO
+  type: chain
+  image: blocknetdx/firo:latest
+  volume: /snode
+  disk: 0 # chain size unknown — update when measured
+  ram: 5
+  cpu: 4
+
+- name: FJC
+  type: chain
+  image: blocknetdx/fujicoin:latest
+  volume: /snode
+  disk: 0 # chain size unknown — update when measured
+  ram: 5
+  cpu: 4
+
+- name: GLC
+  type: chain
+  image: blocknetdx/goldcoin:latest
+  volume: /snode
+  disk: 0 # chain size unknown — update when measured
+  ram: 5
+  cpu: 4
+
+- name: IXC
+  type: chain
+  image: blocknetdx/ixcoin:latest
+  volume: /snode
+  disk: 0 # chain size unknown — update when measured
   ram: 5
   cpu: 4
 
@@ -110,19 +190,43 @@
   ram: 5
   cpu: 4
 
-- name: MUE 
+- name: LYNX
   type: chain
-  image: blocknetdx/monetaryunit:v2.3.0
+  image: blocknetdx/lynx:latest
   volume: /snode
-  disk: 5
+  disk: 0 # chain size unknown — update when measured
   ram: 5
   cpu: 4
 
-- name: PHR 
+- name: MONA
   type: chain
-  image: blocknetdx/phore:v1.8.0
+  image: blocknetdx/monacoin:latest
   volume: /snode
-  disk: 8
+  disk: 0 # chain size unknown — update when measured
+  ram: 5
+  cpu: 4
+
+- name: MRX
+  type: chain
+  image: blocknetdx/metrix:latest
+  volume: /snode
+  disk: 0 # chain size unknown — update when measured
+  ram: 5
+  cpu: 4
+
+- name: NMC
+  type: chain
+  image: blocknetdx/namecoin:latest
+  volume: /snode
+  disk: 0 # chain size unknown — update when measured
+  ram: 5
+  cpu: 4
+
+- name: PART
+  type: chain
+  image: blocknetdx/particl:latest
+  volume: /snode
+  disk: 0 # chain size unknown — update when measured
   ram: 5
   cpu: 4
 
@@ -131,6 +235,22 @@
   image: blocknetdx/pivx:latest
   volume: /snode
   disk: 21
+  ram: 5
+  cpu: 4
+
+- name: PKOIN
+  type: chain
+  image: blocknetdx/pocketcoin:latest
+  volume: /snode
+  disk: 5
+  ram: 5
+  cpu: 4
+
+- name: QTUM
+  type: chain
+  image: blocknetdx/qtum:latest
+  volume: /snode
+  disk: 0 # chain size unknown — update when measured
   ram: 5
   cpu: 4
 
@@ -144,10 +264,26 @@
 
 - name: SCC 
   type: chain
-  image: blocknetdx/stakecubecoin:v3.1.0
+  image: blocknetdx/stakecubecoin:latest
   volume: /snode
   disk: 4
   ram: 8
+  cpu: 4
+
+- name: SPK
+  type: chain
+  image: blocknetdx/sparkspay:latest
+  volume: /snode
+  disk: 0 # chain size unknown — update when measured
+  ram: 5
+  cpu: 4
+
+- name: SWIFT
+  type: chain
+  image: blocknetdx/swiftcash:latest
+  volume: /snode
+  disk: 0 # chain size unknown — update when measured
+  ram: 5
   cpu: 4
 
 - name: SYS 
@@ -155,6 +291,38 @@
   image: blocknetdx/syscoin:latest
   volume: /snode
   disk: 11
+  ram: 5
+  cpu: 4
+
+- name: TBLOCK
+  type: chain
+  image: blocknetdx/blocknet:latest
+  volume: /snode
+  disk: 0 # chain size unknown — update when measured
+  ram: 5
+  cpu: 4
+
+- name: TRC
+  type: chain
+  image: blocknetdx/terracoin:latest
+  volume: /snode
+  disk: 0 # chain size unknown — update when measured
+  ram: 5
+  cpu: 4
+
+- name: TSYS
+  type: chain
+  image: blocknetdx/syscoin:latest
+  volume: /snode
+  disk: 0 # chain size unknown — update when measured
+  ram: 5
+  cpu: 4
+
+- name: UFO
+  type: chain
+  image: blocknetdx/uniform-fiscal-object:latest
+  volume: /snode
+  disk: 0 # chain size unknown — update when measured
   ram: 5
   cpu: 4
 
@@ -166,13 +334,45 @@
   ram: 5
   cpu: 4
 
-- name: PKOIN 
+- name: VIA
   type: chain
-  image: blocknetdx/pocketcoin:latest
+  image: blocknetdx/viacoin:latest
   volume: /snode
-  disk: 5
+  disk: 0 # chain size unknown — update when measured
   ram: 5
-  cpu: 4  
+  cpu: 4
+
+- name: VIVO
+  type: chain
+  image: blocknetdx/vivo:latest
+  volume: /snode
+  disk: 0 # chain size unknown — update when measured
+  ram: 5
+  cpu: 4
+
+- name: VTC
+  type: chain
+  image: blocknetdx/vertcoin:latest
+  volume: /snode
+  disk: 0 # chain size unknown — update when measured
+  ram: 5
+  cpu: 4
+
+- name: WAGE
+  type: chain
+  image: blocknetdx/digiwage:latest
+  volume: /snode
+  disk: 0 # chain size unknown — update when measured
+  ram: 5
+  cpu: 4
+
+- name: XMY
+  type: chain
+  image: blocknetdx/myriad:latest
+  volume: /snode
+  disk: 0 # chain size unknown — update when measured
+  ram: 5
+  cpu: 4
 
 - name: NEVM
   type: evm_chain
@@ -187,7 +387,6 @@
   utxo_plugin_image: blocknetdx/utxo-plugin:latest
   plugin_adapter_image: blocknetdx/plugin-adapter:latest
   exclude_chains: # The utxo-plugin module doesn't yet work for the following chains:
-    - PHR
     - LBC
   volume: /snode
   disk: 200
