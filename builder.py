@@ -140,7 +140,13 @@ if __name__ == '__main__':
 			# Parse sources.yaml categories
 			base = [x for x in source if x['type']=='base']
 			snode_in_base = 'SNODE' in [x['name'] for x in base] # set this flag true if SNODE deployed (not TNODE, TESTSNODE or TESTTNODE)
-			chains = [x for x in source if x['type'] in ['chain','hybrid']]
+			# BLOCK/TBLOCK are never standalone XBridge chains: the Blocknet
+			# wallet is served in-process by the node itself (SNODE/TNODE
+			# serve BLOCK, TESTSNODE/TESTTNODE serve TBLOCK via
+			# scripts/start-<node>.sh). Offering them here produced a
+			# spurious BLOCK service + scripts/entrypoints/start-blocknet.sh
+			# that nothing should consume.
+			chains = [x for x in source if x['type'] in ['chain','hybrid'] and str(x.get('name', '')).upper() not in ['BLOCK','TBLOCK']]
 			utxo_plugins = [x for x in source if x['type'] == 'utxo_plugin']
 			syschain = [x for x in chains if x['name']=='SYS']
 			evm_chains = [x for x in source if x['type']=='evm_chain']

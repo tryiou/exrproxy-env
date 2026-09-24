@@ -62,14 +62,11 @@
   ram: 5
   cpu: 4
 
-- name: BLOCK
-  type: chain
-  image: blocknetdx/blocknet:latest
-  volume: /snode
-  disk: 0 # chain size unknown — update when measured
-  ram: 5
-  cpu: 4
-
+# NOTE: BLOCK/TBLOCK are intentionally absent here. They are never
+# standalone XBridge chains: the Blocknet wallet is served in-process
+# by the node itself (SNODE/TNODE serve BLOCK, TESTSNODE/TESTTNODE
+# serve TBLOCK). See the BLOCK/TBLOCK guards in builder.py and
+# autobuild/app.py, which additionally cover stale --yaml inputs.
 - name: BTC 
   type: chain
   image: blocknetdx/bitcoin:latest
@@ -291,14 +288,6 @@
   image: blocknetdx/syscoin:latest
   volume: /snode
   disk: 11
-  ram: 5
-  cpu: 4
-
-- name: TBLOCK
-  type: chain
-  image: blocknetdx/blocknet:latest
-  volume: /snode
-  disk: 0 # chain size unknown — update when measured
   ram: 5
   cpu: 4
 

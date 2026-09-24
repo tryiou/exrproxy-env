@@ -151,11 +151,24 @@ def processcustom(customlist, SUBNET, BRANCHPATH):
 	for c in customlist:
 		miss_index = []
 		miss_names = []
+		skip_base_index = []
 		for i in range(len(c['daemons'])):
 			name = c['daemons'][i]['name']
 			type = c['daemons'][i]['type']
 			#daemon configs
 			if type in ['chain', 'hybrid']:
+				# BLOCK/TBLOCK are never standalone daemons: the Blocknet
+				# wallet is served in-process by the node itself
+				# (SNODE/TNODE serve BLOCK, TESTSNODE/TESTTNODE serve
+				# TBLOCK via scripts/start-<node>.sh). Silently carrying
+				# them here produced a spurious BLOCK compose service +
+				# scripts/entrypoints/start-blocknet.sh that nothing
+				# should consume. Drop them (covers stale --yaml inputs
+				# that still list BLOCK as a chain).
+				if isinstance(name, str) and name.upper() in ('BLOCK', 'TBLOCK'):
+					print('Skip daemon (served by node): {}'.format(name))
+					skip_base_index.append(i)
+					continue
 				try:
 					print(f'fetch template for {name} from raw.git')
 					xbridge_text = autoconfig.load_template(autoconfig.chain_lookup(BRANCHPATH, name))
@@ -396,9 +409,10 @@ def processcustom(customlist, SUBNET, BRANCHPATH):
 		#     elif var['name'].upper() in ['XR_PROXY', 'SNODE', 'TNODE', 'TESTSNODE', 'ETH', 'XQUERY', 'AVAX', 'PAYMENT']:
 		#         continue
 
-		#delete fake daemons SNODE ETH XR_PROXY
-		to_del_index.sort(reverse=True)
-		for i in to_del_index:
+		#delete fake daemons SNODE ETH XR_PROXY plus base-chain daemons
+		#(BLOCK/TBLOCK) served by the node itself. Single combined pass in
+		#reverse order keeps indices valid.
+		for i in sorted(set(to_del_index) | set(skip_base_index), reverse=True):
 			del c['daemons'][i]
 
 		if rpc_threads > 4:
@@ -441,6 +455,15 @@ def processconfigs(datalist, BRANCHPATH):
 	for data in datalist:
 		for daemon in data['daemons']:
 			name = daemon['name']
+			# BLOCK/TBLOCK are never standalone daemons: the Blocknet
+			# wallet is served in-process by the node itself
+			# (SNODE/TNODE serve BLOCK, TESTSNODE/TESTTNODE serve TBLOCK
+			# via scripts/start-<node>.sh). Rendering an entrypoint for
+			# them produced scripts/entrypoints/start-blocknet.sh, which
+			# nothing should consume.
+			if isinstance(name, str) and name.upper() in ('BLOCK', 'TBLOCK'):
+				print('Skip daemon (served by node): {}'.format(name))
+				continue
 			if name.upper() not in ['TNODE', 'SNODE', 'TESTSNODE', 'TESTTNODE', 'ETH', 'XR_PROXY']:
 				xr_wallet_tokens.append(name.upper())
 				template_wc = _build_wallet_config(BRANCHPATH, daemon)
@@ -450,31 +473,31 @@ def processconfigs(datalist, BRANCHPATH):
 				else:	 
 					write_nevm = False
 					nevm_ip = '0.0.0.0'
-			# btcd-family daemons (lbcd/lbcwallet) expose three distinct ports.
-			# The proxy talks to the wallet facade's legacy RPC; the node's
-			# internal RPC is localhost-only and sits BTCD_NODE_RPC_PORT_OFFSET
-			# (10000) ports above the wallet RPC port.
-			wallet_rpc_port = int(daemon.get('rpcPort', 9245))
-			node_p2p_port = int(daemon.get('p2pPort', 9246))
-			node_rpc_port = wallet_rpc_port + BTCD_NODE_RPC_PORT_OFFSET
+				# btcd-family daemons (lbcd/lbcwallet) expose three distinct ports.
+				# The proxy talks to the wallet facade's legacy RPC; the node's
+				# internal RPC is localhost-only and sits BTCD_NODE_RPC_PORT_OFFSET
+				# (10000) ports above the wallet RPC port.
+				wallet_rpc_port = int(daemon.get('rpcPort', 9245))
+				node_p2p_port = int(daemon.get('p2pPort', 9246))
+				node_rpc_port = wallet_rpc_port + BTCD_NODE_RPC_PORT_OFFSET
 
-			rendered_data_ec = custom_template_ec.render({
-				'walletConfig': template_wc,
-				'config_name': daemon['configName'],
-				'daemon_stem': daemon.get('daemon_stem'),
-				'writeNEVM': write_nevm,
-				'nevmIP': nevm_ip,
-				'daemon_family': daemon.get('daemon_family'),
-				'node_p2p_port': node_p2p_port,
-				'wallet_rpc_port': wallet_rpc_port,
-				'node_rpc_port': node_rpc_port,
-				'coin_params': _coin_params(daemon.get('image', '')),
-				})
-			config_name = './scripts/entrypoints/start-{}.sh'.format(daemon['configName'])
-			print('Creating File: {}'.format(config_name))
-			autoconfig.save_config(rendered_data_ec, config_name)
-			st = os.stat(config_name)
-			os.chmod(config_name, st.st_mode | stat.S_IEXEC)
+				rendered_data_ec = custom_template_ec.render({
+					'walletConfig': template_wc,
+					'config_name': daemon['configName'],
+					'daemon_stem': daemon.get('daemon_stem'),
+					'writeNEVM': write_nevm,
+					'nevmIP': nevm_ip,
+					'daemon_family': daemon.get('daemon_family'),
+					'node_p2p_port': node_p2p_port,
+					'wallet_rpc_port': wallet_rpc_port,
+					'node_rpc_port': node_rpc_port,
+					'coin_params': _coin_params(daemon.get('image', '')),
+					})
+				config_name = './scripts/entrypoints/start-{}.sh'.format(daemon['configName'])
+				print('Creating File: {}'.format(config_name))
+				autoconfig.save_config(rendered_data_ec, config_name)
+				st = os.stat(config_name)
+				os.chmod(config_name, st.st_mode | stat.S_IEXEC)
 
 	XBRIDGE_CONF += ",".join(dict.fromkeys(xr_wallet_tokens))
 	XBRIDGE_CONF += '\n\n'

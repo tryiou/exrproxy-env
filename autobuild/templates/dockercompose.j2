@@ -2,6 +2,7 @@ version: "3.9"
 
 services:
 {% for daemon in daemons %}
+{% if daemon.name|upper != 'BLOCK' and daemon.name|upper != 'TBLOCK' %}
   {{ daemon.name }}:
     image: {{ daemon.image }}
     restart: 'no'
@@ -44,6 +45,7 @@ services:
     networks:
       backend:
         ipv4_address: {{ daemon.ip }}
+{% endif %}
 {% endfor %}
 
   {{ blocknet_node }}:

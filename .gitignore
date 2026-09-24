@@ -5,6 +5,8 @@ scripts/entrypoints/*.sh
 scripts/config/*.conf
 inputs_yaml/*.yaml
 docker-compose.yml
+docker-compose.local.yml
+docker-compose.override.yml
 xquery.yaml
 .env
 .known_hosts
@@ -12,3 +14,6 @@ xquery.yaml
 .cache
 .cache_ip
 .python-version
+__pycache__/
+*.pyc
+*.pyo
