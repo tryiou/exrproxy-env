@@ -363,6 +363,14 @@
   ram: 5
   cpu: 4
 
+- name: XVG
+  type: chain
+  image: blocknetdx/verge:latest
+  volume: /snode
+  disk: 0 # chain size unknown — update when measured
+  ram: 5
+  cpu: 4
+
 - name: NEVM
   type: evm_chain
   image: blocknetdx/syscoin:latest
