@@ -2,13 +2,14 @@
 
   utxo-plugin-{{ chain.name.upper() }}:
     image: {{ utxo_plugin_image }}
-    restart: 'no' 
+    restart: unless-stopped
     environment:
       PLUGIN_COIN: {{ chain.name.upper() }}
       PLUGIN_PORT: 8000
       DB_ENGINE: 'rocksdb'
       NETWORK: 'mainnet'
       SKIP_COMPACT: 'true'
+      AUTO_COMPACT_THRESHOLD: '55000'
       DAEMON_ADDR: {{ chain.daemon_addr }}
       DAEMON_RPC_PORT: {{ chain.rpc_port }}
       RPC_USER: "${RPC_USER}"
