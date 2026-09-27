@@ -13,6 +13,7 @@ import dotenv
 import socket
 import psutil
 import pathlib
+from autobuild.utils.utxo import coin_map_keys_from_source
 import shutil
 import re
 from packaging import version
@@ -32,6 +33,34 @@ input_template_args = [{
 	'eth_testnet': False,
 	'syncmode': 'full'
 }]
+
+
+def read_utxo_plugin_source(source):
+	"""Read utxo-plugin main.py source from a local path or a URL.
+
+	`file://` URLs and plain filesystem paths are read from disk (dev loops
+	against a local checkout — no server needed); anything else is fetched
+	over HTTP. Raises Exception (same shape as the fetch failure) when the
+	source cannot be read.
+	"""
+	if source.startswith("file://"):
+		path = source[len("file://"):]
+		if not os.path.isfile(path):
+			raise Exception(f"EROR: Failed to read list of supported UTXO Plugin chains from {source}: file not found.")
+		source = path
+	if os.path.isfile(source):
+		try:
+			with open(source) as f:
+				return f.read()
+		except OSError as e:
+			raise Exception(f"EROR: Failed to read list of supported UTXO Plugin chains from {source}: {e}.")
+	try:
+		get_utxo_plugin_code_response = requests.get(source, timeout=30)
+	except requests.RequestException as e:
+		raise Exception(f"EROR: Failed to get list of supported UTXO Plugin chains from {source}: {e}.")
+	if get_utxo_plugin_code_response.status_code != 200:
+		raise Exception(f"EROR: Failed to get list of supported UTXO Plugin chains from {source}.")
+	return get_utxo_plugin_code_response.text
 
 
 class Inquirer():
@@ -90,16 +119,22 @@ def resolve_compose():
     return (None, None)
 
 class Snode():
-	def __init__(self, dirname, envfile):
+	#: Default main.py source scraped for the supported utxo-plugin coin list.
+	#: Overridable via builder.py --utxo-plugin-source: an HTTP(S) URL (e.g. a
+	#: fork branch for dev loops) or a local file path (e.g. a workspace
+	#: checkout); the gate and render logic are identical either way.
+	DEFAULT_UTXO_PLUGIN_SOURCE = 'https://raw.githubusercontent.com/blocknetdx/utxo-plugin/main/main.py'
+
+	def __init__(self, dirname, envfile, utxo_plugin_source=None):
 		self.dirname = dirname
 		self.inquirer = Inquirer()
 		self.envfile = envfile
 		self.config = dotenv.dotenv_values(self.envfile)
-		get_utxo_plugin_code_response = requests.get('https://raw.githubusercontent.com/blocknetdx/utxo-plugin/main/main.py')
-		if get_utxo_plugin_code_response.status_code != 200:
-			raise Exception("EROR: Failed to get list of supported UTXO Plugin chains from https://raw.githubusercontent.com/blocknetdx/utxo-plugin/main/main.py.")
-		coin_map = re.search("coin_map([^}]|\n)+}", get_utxo_plugin_code_response.text)
-		self.supported_utxo_plugin_chains = re.findall(r"\"(.+)\"", coin_map.group())
+		self.utxo_plugin_source = utxo_plugin_source or self.DEFAULT_UTXO_PLUGIN_SOURCE
+		source_text = read_utxo_plugin_source(self.utxo_plugin_source)
+		self.supported_utxo_plugin_chains = coin_map_keys_from_source(source_text)
+		if not self.supported_utxo_plugin_chains:
+			raise Exception(f"EROR: No coin_map entries found in utxo-plugin source {self.utxo_plugin_source}.")
 		#print("Supported UTXO Plugin Chains: ", self.supported_utxo_plugin_chains)
 
 	def get_sudo(self):

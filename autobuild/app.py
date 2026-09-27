@@ -9,7 +9,7 @@ from jinja2 import Environment, FileSystemLoader, Template, BaseLoader
 from autobuild.utils.autoconfig import *
 import autobuild.utils.autoconfig as autoconfig
 from autobuild.utils.xquery import xq_template
-from autobuild.utils.utxo import utxo_template
+from autobuild.utils.utxo import utxo_template, validate_utxo_chains_against_image, validate_utxo_chains_against_source
 from icecream import ic, install
 from rich import print
 
@@ -112,7 +112,7 @@ def _coin_params(image, timeout=60):
 	return parsed
 
 
-def processcustom(customlist, SUBNET, BRANCHPATH):
+def processcustom(customlist, SUBNET, BRANCHPATH, utxo_supported_chains=None):
 	if IPS_CACHE not in os.listdir(os.getcwd()):
 		write_text_file(IPS_CACHE,json.dumps({'ip':{}}, indent=4, sort_keys=False))
 	used_ip = json.loads(load_text_file(os.getcwd()+'/'+IPS_CACHE))
@@ -369,6 +369,31 @@ def processcustom(customlist, SUBNET, BRANCHPATH):
 					used_ip, utxotemplate = utxo_template(used_ip, SUBNET, c['daemons'][i], customlist[0])
 					for key, item in utxotemplate.items():
 						c[key] = item
+					# Fail fast when the render selects chains the utxo-plugin
+					# cannot serve (crash-loop hours later otherwise).
+					# Authority is the configured coin source
+					# (--utxo-plugin-source: local path for devs, remote
+					# URL for production), not the registry image tag.
+					# A source miss raises outside the probe handler below
+					# on purpose: it is fatal, never a skippable warning.
+					# Without a source list (None), fall back to probing
+					# the image: a probe failure (RuntimeError) warns and
+					# continues, but a proven lack of support (ValueError)
+					# propagates and aborts the render.
+					utxo_chain_names = [x['name'] for x in utxotemplate['full_utxo_plugin_chains']]
+					if utxo_supported_chains is not None:
+						source_keys = validate_utxo_chains_against_source(
+							utxo_chain_names, utxo_supported_chains)
+						print(f"utxo-plugin source serves: {', '.join(source_keys)}")
+					else:
+						try:
+							image_keys = validate_utxo_chains_against_image(
+								utxo_chain_names,
+								customlist[0]['utxo_plugin_image'])
+							print(f"utxo-plugin image {customlist[0]['utxo_plugin_image']} serves: {', '.join(image_keys)}")
+						except RuntimeError as e:
+							print(f"[bold yellow]WARNING: {e} (coverage check skipped)[/bold yellow]")
+
 
 				#volumes paths configs
 				for j in list(c['daemons'][i]):
