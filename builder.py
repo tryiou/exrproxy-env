@@ -102,6 +102,21 @@ known_hosts = json.loads(load_text_file(KNOWN_HOSTS_FILE))
 known_volumes = json.loads(load_text_file(KNOWN_VOLUMES))
 cache = json.loads(load_text_file(CACHE))
 
+# Self-heal recorded install locations. A chaindir tree that was moved or
+# deleted leaves a stale absolute path in .known_volumes; trusting it fed
+# non-existent paths to the disk preflight (psutil.FileNotFoundError abort)
+# and, worse, would bind-mount an empty directory created as root. A lost
+# directory means "forget the override": the sources.yaml default is used.
+known_volumes, healed_volumes = heal_known_volumes(known_volumes, source)
+if healed_volumes:
+	for name, stale_path, fallback, reason in healed_volumes:
+		print(f'[bold yellow]Ignoring recorded install location for {name}: {stale_path} ({reason})[/bold yellow]')
+		if fallback is None:
+			print(f'[bold yellow]  -> {name} is not in {SOURCE}; only the override was dropped[/bold yellow]')
+		else:
+			print(f'[bold yellow]  -> back to the {SOURCE} default {fallback}[/bold yellow]')
+	write_text_file(KNOWN_VOLUMES,json.dumps(known_volumes, indent=4, sort_keys=False))
+
 # Upgrade cache if necessary
 if 'version' not in cache:
 	cache['version'] = 1
@@ -302,7 +317,6 @@ if __name__ == '__main__':
 				answer = snode.inquirer.pick_checkbox('Select to which entries you wish to change install location:',[{'name':f"{x['name']} {x['volume']}",'checked':False} for x in volumes])
 				if len(answer) == 0:
 					print(f'Location change ignored... No selection.')
-					snode.comparedisksize([x['name'] for x in input_template[0]['daemons'] if 'volume' in x.keys()], [x['volume'] for x in input_template[0]['daemons'] if 'volume' in x.keys()], [x['disk'] for x in input_template[0]['daemons'] if 'volume' in x.keys()])
 				else:
 					for entry in answer:
 						not_abs_path = False
@@ -319,22 +333,19 @@ if __name__ == '__main__':
 							if e['name'] == entry.split(' ')[0]:
 								if entry_answer == '':
 									entry_answer = input_template[0]['daemons'][i]['volume']
+								elif not os.path.isdir(entry_answer):
+									print(f'[bold yellow]{entry_answer}[/bold yellow] does not exist yet; it will be created empty on first deploy.')
 								input_template[0]['daemons'][i]['volume'] = entry_answer
 								known_volumes['volumes'][e['name']] =  entry_answer
 								snode.comparedisksize([entry.split(' ')[0]], [entry_answer], [input_template[0]['daemons'][i]['disk']])
-				print('[bold yellow]Updated install locations[/bold yellow]')
-				snode.comparedisksize([x['name'] for x in input_template[0]['daemons'] if 'volume' in x.keys()], [x['volume'] for x in input_template[0]['daemons'] if 'volume' in x.keys()], [x['disk'] for x in input_template[0]['daemons'] if 'volume' in x.keys()])
-				used_volumes = set([x['volume'] for x in input_template[0]['daemons'] if 'volume' in x.keys()])
-				for volume in used_volumes:
-					required = sum([x['disk'] for x in input_template[0]['daemons'] if 'volume' in x.keys() and x['volume']==volume])
-					snode.comparedisksize(['TOTAL'], [volume], [required])
-			else:
-				print('[bold yellow]Updated install locations[/bold yellow]')
-				snode.comparedisksize([x['name'] for x in input_template[0]['daemons'] if 'volume' in x.keys()], [x['volume'] for x in input_template[0]['daemons'] if 'volume' in x.keys()], [x['disk'] for x in input_template[0]['daemons'] if 'volume' in x.keys()])
-				used_volumes = set([x['volume'] for x in input_template[0]['daemons'] if 'volume' in x.keys()])
-				for volume in used_volumes:
-					required = sum([x['disk'] for x in input_template[0]['daemons'] if 'volume' in x.keys() and x['volume']==volume])
-					snode.comparedisksize(['TOTAL'], [volume], [required])
+			print('[bold yellow]Updated install locations[/bold yellow]')
+			# One preflight for both paths (changed / unchanged): per-daemon,
+			# then one TOTAL row per distinct volume actually in use.
+			vol_daemons = [x for x in input_template[0]['daemons'] if 'volume' in x.keys()]
+			snode.comparedisksize([x['name'] for x in vol_daemons], [x['volume'] for x in vol_daemons], [x['disk'] for x in vol_daemons])
+			for volume in set([x['volume'] for x in vol_daemons]):
+				required = sum([x['disk'] for x in vol_daemons if x['volume']==volume])
+				snode.comparedisksize(['TOTAL'], [volume], [required])
 			write_text_file(KNOWN_VOLUMES,json.dumps(known_volumes, indent=4, sort_keys=False))
 			print(f"[bold magenta]{'-'*50}[/bold magenta]")
 			now = datetime.now().strftime("%d-%m-%Y-%H:%M")

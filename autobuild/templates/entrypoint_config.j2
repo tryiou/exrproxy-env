@@ -7,6 +7,11 @@ datadir=/opt/blockchain/data
 # uno daemon need '-reindex' launch option for first launch.
 rpcthreads=8
 {% endif %}
+{% if config_name == 'syscoin' and not writeNEVM %}
+# UTXO-only deployment: an empty NEVM publisher keeps the daemon from
+# bootstrapping its bundled SysGeth chain, so only the core wallet runs.
+zmqpubnevm=
+{% endif %}
 rpcbind=0.0.0.0
 rpcuser=${RPC_USER}
 rpcpassword=${RPC_PASSWORD}
@@ -55,7 +60,12 @@ tail -F /opt/blockchain/data/debug.log &
 {% endif %}
 # ensure docker runs daemon as pid1
 # launch_flags suppressed when NEVM is enabled: an image off-switch would kill bundled SysGeth.
+{% if config_name == 'syscoin' %}
+# Syscoin's EVM off-switch lives in its conf above, never as a launch flag.
+exec $1 -conf=/opt/blockchain/config/{{ config_name }}.conf
+{% else %}
 exec $1 -conf=/opt/blockchain/config/{{ config_name }}.conf{% if coin_params.launch_flags and not writeNEVM %} {{ coin_params.launch_flags }}{% endif %}
+{% endif %}
 {% else %}
 # ensure docker runs daemon as pid1
 exec $1 -conf=/opt/blockchain/config/{{ config_name }}.conf

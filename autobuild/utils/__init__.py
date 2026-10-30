@@ -63,6 +63,46 @@ def read_utxo_plugin_source(source):
 	return get_utxo_plugin_code_response.text
 
 
+def _source_default_volume(source, name):
+	"""Default install location for `name` as declared in sources.yaml."""
+	for entry in source or []:
+		if str(entry.get('name', '')).upper() == str(name).upper():
+			return entry.get('volume')
+	return None
+
+
+def heal_known_volumes(known_volumes, source):
+	"""Forget recorded install locations whose directory no longer exists.
+
+	`.known_volumes` outlives the directories it points at: moving or
+	deleting a chaindir tree leaves a stale absolute path behind, and every
+	caller that trusts it (the disk preflight, the rendered bind mounts)
+	then works on a path that is not there. The sources.yaml default is the
+	only safe fallback, so a lost directory means "forget it" rather than
+	"crash" or "silently mount an empty path as root".
+
+	Returns (healed, dropped) where dropped is a list of
+	(name, path, fallback, reason) tuples, so the caller can report each
+	repair and persist the healed mapping.
+	"""
+	healed = dict(known_volumes or {})
+	volumes = {}
+	dropped = []
+	for name, path in (healed.get('volumes') or {}).items():
+		fallback = _source_default_volume(source, name)
+		reason = None
+		if not isinstance(path, str) or not os.path.isabs(path):
+			reason = 'not an absolute path'
+		elif not os.path.isdir(path):
+			reason = 'directory does not exist'
+		if reason is None:
+			volumes[name] = path
+			continue
+		dropped.append((name, path, fallback, reason))
+	healed['volumes'] = volumes
+	return healed, dropped
+
+
 class Inquirer():
 	def __init__(self):
 		self.style = Style.from_dict({
@@ -166,54 +206,76 @@ class Snode():
 		table.add_column('Checks',justify='left', no_wrap=False)
 		table.add_column('Requirement Calculations',justify='left', style='bold yellow', no_wrap=False)
 		for index, app in enumerate(app_list):
-			dirr = directory_list[index] if os.path.isdir(directory_list[index]) else str(pathlib.Path(directory_list[index]).parent.absolute())
-			hdd = psutil.disk_usage(dirr)
-			gb = round(hdd.free / (2**30))
+			volume = directory_list[index]
+			# A lost install location (moved/deleted chaindirs) must report,
+			# never abort the build: heal_known_volumes() already reverted it
+			# to the sources.yaml default, so reaching this branch means even
+			# that default is absent. Measure its parent so the free-space
+			# figure still belongs to the right filesystem.
+			volume_exists = os.path.isdir(volume)
+			dirr = volume if volume_exists else str(pathlib.Path(volume).parent)
+			unmeasurable = False
+			try:
+				gb = round(psutil.disk_usage(dirr).free / (2**30))
+			except OSError:
+				gb = 0
+				unmeasurable = True
+			# Only the directly measured path is meaningful for `du`: a missing
+			# volume has no per-chain dirs to size.
+			sizeable = volume_exists and not unmeasurable
 			exists = 0
 			found = ''
-			try:
-				dirs = os.listdir(directory_list[index])
-				_app = app
-				if app == 'PAYMENT':
-					_app = 'eth_pymt_db'
-				for i, dir in enumerate(dirs):
-					if _app.lower() == dir.lower():
-						found = dir
-						print(f'Found [bold cyan]{dir}[/bold cyan]')
-						proc = subprocess.Popen(
-							['sudo', '-S', 'du', '-k', '-d', '0', f'{dirr}/{dir}'],
-							stdin=subprocess.PIPE,
-							stdout=subprocess.PIPE,
-							stderr=subprocess.PIPE
-						).communicate(input=f'{self.sudo_pass}\n'.encode())
-						data = int(int(proc[0].decode('UTF-8').split('\t')[0]))
-						exists = round(data/float(1<<20),2)
-						if dirr in self.dir_cache:
-							self.dir_cache[dirr] += exists
-						else:
-							self.dir_cache[dirr] = exists
-						# gb += exists
-			except:
-				pass
+			if sizeable:
+				try:
+					dirs = os.listdir(directory_list[index])
+					_app = app
+					if app == 'PAYMENT':
+						_app = 'eth_pymt_db'
+					for i, dir in enumerate(dirs):
+						if _app.lower() == dir.lower():
+							found = dir
+							print(f'Found [bold cyan]{dir}[/bold cyan]')
+							proc = subprocess.Popen(
+								['sudo', '-S', 'du', '-k', '-d', '0', f'{dirr}/{dir}'],
+								stdin=subprocess.PIPE,
+								stdout=subprocess.PIPE,
+								stderr=subprocess.PIPE
+							).communicate(input=f'{self.sudo_pass}\n'.encode())
+							data = int(int(proc[0].decode('UTF-8').split('\t')[0]))
+							exists = round(data/float(1<<20),2)
+							if dirr in self.dir_cache:
+								self.dir_cache[dirr] += exists
+							else:
+								self.dir_cache[dirr] = exists
+							# gb += exists
+				except:
+					pass
 			if app == 'TOTAL':
 				if directory_list[index] in self.dir_cache:
 					exists = self.dir_cache[directory_list[index]]
-			if req_list[index] <= 0:
+			req_display = 'unknown' if req_list[index] <= 0 else f'{req_list[index]} GB'
+			if not volume_exists:
+				# Never a silent PASS: this location is not on disk, so the
+				# deploy would bind-mount an empty directory created as root.
+				# Distinct from UNKNOWN ("footprint not declared"), and the
+				# free-space figure belongs to the parent filesystem.
+				check, colour = 'NO DIR', 'red'
+				calc_display = f'[{colour}]missing {volume}[/{colour}]'
+			elif req_list[index] <= 0:
 				# Unknown footprint (e.g. disk: 0 in sources.yaml): never
 				# silent-PASS a safety check that cannot fail. Visible,
 				# non-blocking; real requirements keep exact math.
 				check, colour = 'UNKNOWN', 'yellow'
+				calc_display = f'[{colour}]unknown requirement[/{colour}]'
 			elif gb-req_list[index]+exists <=0:
 				check, colour = 'WARNING', 'red'
+				calc_display = f'[{colour}]{"{:.2f}".format(gb)}-({req_list[index]}-{exists}) = {"{:.2f}".format(gb-req_list[index]+exists)}[/{colour}] GB'
 			else:
 				check, colour = 'PASS', 'green'
-			if check == 'UNKNOWN':
-				req_display = 'unknown'
-				calc_display = f'[{colour}]unknown requirement[/{colour}]'
-			else:
-				req_display = f'{req_list[index]} GB'
 				calc_display = f'[{colour}]{"{:.2f}".format(gb)}-({req_list[index]}-{exists}) = {"{:.2f}".format(gb-req_list[index]+exists)}[/{colour}] GB'
 			table.add_row(app.ljust(8,' '), directory_list[index], f'[{colour}]{"{:.2f}".format(gb)} GB[/{colour}]',req_display,found, f'{exists} GB',f'[bold {colour}]{check}[/bold {colour}]',calc_display)
+			if not volume_exists:
+				print(f'[bold red]{directory_list[index]} is not on disk: {gb} GB free measured on {dirr} (would be created empty on deploy).[/bold red]')
 			if app == 'TOTAL' and check == 'WARNING':
 				print(f'[bold red]{"{:.2f}".format(gb-req_list[index]+exists)} GB more are required.\nYou might wanna change a {directory_list[index]} install location.[/bold red]')
 		subprocess.Popen(['sudo','-k'])
