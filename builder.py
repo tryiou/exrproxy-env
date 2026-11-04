@@ -49,7 +49,7 @@ parser.add_argument('--prune', help='Prune docker', default=False, action='store
 parser.add_argument('--source', help='Source file', default='autobuild/sources.yaml')
 parser.add_argument('--yaml', help='Custom input yaml', default=False)
 parser.add_argument('--branchpath', default='https://raw.githubusercontent.com/blocknetdx/blockchain-configuration-files/master')
-parser.add_argument('--utxo-plugin-source', default=None, help='utxo-plugin coin-list source: URL or local main.py path')
+parser.add_argument('--utxo-plugin-source', default=None, help='utxo-plugin coin-map source: URL or local coins.py path')
 parser.add_argument('--xquerytag', help="Override XQuery images tag", default='latest')
 parser.add_argument('--prunecache', help='Reinit .known_hosts, .known_volumes, .env and .cache files', action='store_true')
 parser.add_argument('--subnet', help='Subnet to configure docker-compose network', default="172.31.0.0/20")
@@ -383,7 +383,7 @@ if __name__ == '__main__':
 		input_template_args[0]['xquery_tag'] = XQUERYTAG
 		input_template_args[0]['subnet'] = SUBNET
 		data_with_ips = processcustom(input_template_args, SUBNET, BRANCHPATH,
-		                            snode.supported_utxo_plugin_chains)
+		                            snode.supported_utxo_coin_map)
 		processconfigs(data_with_ips, BRANCHPATH)
 		
 		# Deploy snode config

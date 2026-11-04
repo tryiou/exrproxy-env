@@ -13,7 +13,7 @@ import dotenv
 import socket
 import psutil
 import pathlib
-from autobuild.utils.utxo import coin_map_keys_from_source
+from autobuild.utils.utxo import coin_map_from_source
 import shutil
 import re
 from packaging import version
@@ -36,7 +36,7 @@ input_template_args = [{
 
 
 def read_utxo_plugin_source(source):
-	"""Read utxo-plugin main.py source from a local path or a URL.
+	"""Read utxo-plugin coins.py source from a local path or a URL.
 
 	`file://` URLs and plain filesystem paths are read from disk (dev loops
 	against a local checkout — no server needed); anything else is fetched
@@ -159,11 +159,11 @@ def resolve_compose():
     return (None, None)
 
 class Snode():
-	#: Default main.py source scraped for the supported utxo-plugin coin list.
+	#: Default coins.py source scraped for the supported utxo-plugin coin map.
 	#: Overridable via builder.py --utxo-plugin-source: an HTTP(S) URL (e.g. a
 	#: fork branch for dev loops) or a local file path (e.g. a workspace
 	#: checkout); the gate and render logic are identical either way.
-	DEFAULT_UTXO_PLUGIN_SOURCE = 'https://raw.githubusercontent.com/blocknetdx/utxo-plugin/main/main.py'
+	DEFAULT_UTXO_PLUGIN_SOURCE = 'https://raw.githubusercontent.com/blocknetdx/utxo-plugin/main/coins.py'
 
 	def __init__(self, dirname, envfile, utxo_plugin_source=None):
 		self.dirname = dirname
@@ -172,7 +172,8 @@ class Snode():
 		self.config = dotenv.dotenv_values(self.envfile)
 		self.utxo_plugin_source = utxo_plugin_source or self.DEFAULT_UTXO_PLUGIN_SOURCE
 		source_text = read_utxo_plugin_source(self.utxo_plugin_source)
-		self.supported_utxo_plugin_chains = coin_map_keys_from_source(source_text)
+		self.supported_utxo_coin_map = coin_map_from_source(source_text)
+		self.supported_utxo_plugin_chains = list(self.supported_utxo_coin_map)
 		if not self.supported_utxo_plugin_chains:
 			raise Exception(f"EROR: No coin_map entries found in utxo-plugin source {self.utxo_plugin_source}.")
 		#print("Supported UTXO Plugin Chains: ", self.supported_utxo_plugin_chains)

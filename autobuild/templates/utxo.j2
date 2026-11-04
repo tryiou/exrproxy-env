@@ -4,21 +4,26 @@
     image: {{ utxo_plugin_image }}
     restart: unless-stopped
     environment:
-      PLUGIN_COIN: {{ chain.name.upper() }}
-      PLUGIN_PORT: 8000
+      COIN: "{{ chain.coin_class }}"
+      NET: 'mainnet'
       DB_ENGINE: 'rocksdb'
-      NETWORK: 'mainnet'
-      SKIP_COMPACT: 'true'
-      AUTO_COMPACT_THRESHOLD: '55000'
-      DAEMON_ADDR: {{ chain.daemon_addr }}
-      DAEMON_RPC_PORT: {{ chain.rpc_port }}
-      RPC_USER: "${RPC_USER}"
-      RPC_PASSWORD: "${RPC_PASSWORD}"
-      RPC_ALLOWIP: {{ subnet }}
+      DB_DIRECTORY: '/app/electrumx/{{ chain.name.upper() }}'
+      # RPC is for operators inside the container; only the wallet-facing
+      # TCP port is reachable from the backend network.
+      SERVICES: 'tcp://:9000,rpc://localhost:8000'
+      DAEMON_URL: 'http://${RPC_USER}:${RPC_PASSWORD}@{{ chain.daemon_addr }}:{{ chain.rpc_port }}/'
+      # One upstream session serves every wallet: subscriptions arrive in
+      # batches and the stock cost model must not throttle them.
+      INITIAL_CONCURRENT: '100'
+      COST_SOFT_LIMIT: '1000000'
+      COST_HARD_LIMIT: '10000000'
+      REQUEST_SLEEP: '0'
     stop_signal: SIGINT
     stop_grace_period: 5m
     volumes:
-      - {{ utxo_plugin_volume }}/utxo_plugin/{{ chain.name.upper() }}:/app/plugins/utxoplugin-{{ chain.name.upper() }}
+      # Fresh ElectrumX tree: the old utxo_plugin/<TICKER> database is a
+      # different schema and stays untouched for rollback.
+      - {{ utxo_plugin_volume }}/utxo_plugin/electrumx/{{ chain.name.upper() }}:/app/electrumx/{{ chain.name.upper() }}
     logging:
       driver: "json-file"
       options:
@@ -37,6 +42,8 @@
     restart: unless-stopped
     environment:
       UTXO_PLUGIN_LIST: {{ adapter_utxo_plugin_list }}
+      UTXO_PLUGIN_PORT: '9000'
+      UTXO_COIN_CONFIG: '{{ adapter_coin_config }}'
     stop_signal: SIGINT
     stop_grace_period: 10s
     depends_on:

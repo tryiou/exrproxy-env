@@ -9,7 +9,12 @@ from jinja2 import Environment, FileSystemLoader, Template, BaseLoader
 from autobuild.utils.autoconfig import *
 import autobuild.utils.autoconfig as autoconfig
 from autobuild.utils.xquery import xq_template
-from autobuild.utils.utxo import utxo_template, validate_utxo_chains_against_image, validate_utxo_chains_against_source
+from autobuild.utils.utxo import (
+	utxo_template,
+	image_coin_map,
+	validate_utxo_chains_against_image,
+	validate_utxo_chains_against_source,
+)
 from icecream import ic, install
 from rich import print
 
@@ -366,7 +371,16 @@ def processcustom(customlist, SUBNET, BRANCHPATH, utxo_supported_chains=None):
 #					utxo_plugin = dict(c['daemons'][i])
 					customlist[0]['plugins'] += UTXO_PLUGIN_METHODS
 					customlist[0]['utxo_plugin_methods'] = UTXO_PLUGIN_METHODS
-					used_ip, utxotemplate = utxo_template(used_ip, SUBNET, c['daemons'][i], customlist[0])
+					utxo_coin_map = utxo_supported_chains
+					if utxo_coin_map is None:
+						try:
+							utxo_coin_map = image_coin_map(customlist[0]['utxo_plugin_image'])
+						except RuntimeError as e:
+							print(f"[bold yellow]WARNING: {e} (coin class map unavailable)[/bold yellow]")
+							utxo_coin_map = {}
+					used_ip, utxotemplate = utxo_template(
+						used_ip, SUBNET, c['daemons'][i], customlist[0],
+						utxo_coin_map, BRANCHPATH)
 					for key, item in utxotemplate.items():
 						c[key] = item
 					# Fail fast when the render selects chains the utxo-plugin

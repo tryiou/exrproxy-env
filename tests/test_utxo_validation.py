@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Unit tests for utxo-plugin chain validation helpers.
+"""Unit tests for utxo-plugin chain validation and render helpers.
 
-Covers `autobuild.utils.utxo.coin_map_keys_from_source` (AST extraction of
-the coin_map registry without executing the file) and
-`autobuild.utils.utxo.missing_chain_support` (render-vs-image comparison).
+Covers the AST extraction of the coin_map registry (without executing the
+file), the render-vs-image comparison, and the coin facts read from the
+blockchain-configuration source of truth.
 
 Stdlib only; host-runnable: `python3 -m unittest discover -s tests`
 from the repo root.
@@ -12,8 +12,11 @@ import unittest
 from unittest.mock import patch
 
 from autobuild.utils.utxo import (
+    coin_facts,
+    coin_map_from_source,
     coin_map_keys_from_source,
     missing_chain_support,
+    utxo_template,
     validate_utxo_chains_against_image,
     validate_utxo_chains_against_source,
 )
@@ -144,6 +147,73 @@ class TestValidateUtxoChainsAgainstSource(unittest.TestCase):
         # An empty authority must be fatal, never a silent pass.
         with self.assertRaises(RuntimeError):
             validate_utxo_chains_against_source(["BLOCK"], [])
+
+
+class TestCoinFacts(unittest.TestCase):
+    def _facts(self, conf_text, ticker="BLOCK"):
+        import autobuild.utils.utxo as utxo_mod
+        manifest = '[{"ticker": "%s", "xbridge_conf": "blocknet--v1.conf"}]' % ticker
+
+        def loader(url):
+            return manifest if url.endswith("manifest-latest.json") else conf_text
+
+        with patch.object(utxo_mod, "load_template", side_effect=loader):
+            return coin_facts("/bcf", [ticker])
+
+    def test_reads_divisor_and_prefixes_from_the_conf(self):
+        facts = self._facts(
+            "COIN=100000000\nAddressPrefix=26\nScriptPrefix=28\n")
+        self.assertEqual(
+            {"BLOCK": {"divisor": 100000000, "p2pkh": "1a", "p2sh": ["1c"]}},
+            facts)
+
+    def test_six_decimal_coin_keeps_its_divisor(self):
+        facts = self._facts(
+            "COIN=1000000\nAddressPrefix=30\nScriptPrefix=33\n", "XVG")
+        self.assertEqual(1000000, facts["XVG"]["divisor"])
+
+    def test_cashaddr_prefix_is_passed_through(self):
+        facts = self._facts(
+            "COIN=100000000\nAddressPrefix=0\nScriptPrefix=5\n"
+            "CashAddrPrefix=bitcoincash\n", "BCH")
+        self.assertEqual("bitcoincash", facts["BCH"]["cashaddr_prefix"])
+
+    def test_missing_fact_is_fatal_not_defaulted(self):
+        with self.assertRaises(ValueError):
+            self._facts("COIN=100000000\nScriptPrefix=28\n")
+
+    def test_unknown_ticker_is_fatal(self):
+        import autobuild.utils.utxo as utxo_mod
+        manifest = '[{"ticker": "BLOCK", "xbridge_conf": "blocknet--v1.conf"}]'
+        with patch.object(utxo_mod, "load_template", return_value=manifest):
+            with self.assertRaises(ValueError) as ctx:
+                coin_facts("/bcf", ["NOPE"])
+        self.assertIn("NOPE", str(ctx.exception))
+
+
+class TestUtxoTemplateMapping(unittest.TestCase):
+    def test_each_chain_gets_its_coin_class_and_adapter_facts(self):
+        plugin = {"chains": [{"name": "BLOCK"}, {"name": "XVG"}]}
+        data = {
+            "daemons": [
+                {"name": "XVG", "ip": "172.31.10.73", "rpcPort": "20102"},
+            ],
+            "snode_ip": "172.31.5.204",
+        }
+        facts = {
+            "BLOCK": {"divisor": 100000000, "p2pkh": "1a", "p2sh": ["1c"]},
+            "XVG": {"divisor": 1000000, "p2pkh": "1e", "p2sh": ["21"]},
+        }
+        with patch("autobuild.utils.utxo.coin_facts", return_value=facts):
+            used, out = utxo_template(
+                {"ip": {}}, "172.31.0.0/20", plugin, data,
+                {"BLOCK": "Blocknet", "XVG": "Verge"}, "/bcf")
+        classes = {c["name"]: c["coin_class"] for c in out["full_utxo_plugin_chains"]}
+        self.assertEqual({"BLOCK": "Blocknet", "XVG": "Verge"}, classes)
+        import json
+        config = json.loads(out["adapter_coin_config"])
+        self.assertEqual(1000000, config["XVG"]["divisor"])
+        self.assertIn("${RPC_USER}", config["BLOCK"]["daemon_url"])
 
 
 class TestSnodeCoinList(unittest.TestCase):

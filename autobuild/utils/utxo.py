@@ -1,15 +1,15 @@
 from rich import print
-from autobuild.utils.autoconfig import random_ip
+from autobuild.utils.autoconfig import load_template, manifest_content, random_ip
 import ast
+import json
 import subprocess
 
 
-def coin_map_keys_from_source(source):
-	"""Extract coin_map ticker keys from main.py source without executing it.
+def coin_map_from_source(source):
+	"""Extract the ticker -> ElectrumX coin class map from utxo-plugin source.
 
-	AST-based (no imports, no side effects). Returns tickers in definition
-	order; [] when no coin_map assignment exists. Raises SyntaxError on
-	unparseable source.
+	AST-based (no imports, no side effects). Returns an ordered dict; {} when
+	no coin_map assignment exists. Raises SyntaxError on unparseable source.
 	"""
 	tree = ast.parse(source)
 	for node in tree.body:
@@ -17,9 +17,21 @@ def coin_map_keys_from_source(source):
 			target = node.targets[0]
 			if isinstance(target, ast.Name) and target.id == "coin_map":
 				if isinstance(node.value, ast.Dict):
-					return [k.value for k in node.value.keys
-							if isinstance(k, ast.Constant) and isinstance(k.value, str)]
-	return []
+					mapping = {}
+					for key, value in zip(node.value.keys, node.value.values):
+						if not (isinstance(key, ast.Constant) and isinstance(key.value, str)):
+							continue
+						if isinstance(value, ast.Constant) and isinstance(value.value, str):
+							mapping[key.value] = value.value
+						else:
+							mapping[key.value] = ast.unparse(value)
+					return mapping
+	return {}
+
+
+def coin_map_keys_from_source(source):
+	"""Ticker keys only, kept for callers that need the membership list."""
+	return list(coin_map_from_source(source))
 
 
 def missing_chain_support(chains, image_coin_list):
@@ -27,18 +39,21 @@ def missing_chain_support(chains, image_coin_list):
 	return [c for c in chains if c not in image_coin_list]
 
 
-def image_coin_map_keys(image):
-	"""List coin_map tickers baked into a utxo-plugin image.
+def image_coin_map(image):
+	"""The ticker -> coin class map baked into a utxo-plugin image.
 
 	Runs a side-effect-free AST probe inside a throwaway container; the
 	image's code is parsed, never imported. Raises RuntimeError when docker
 	is unavailable or the image cannot be probed.
 	"""
-	probe = ("import ast, sys; tree = ast.parse(open('/app/plugins/main.py').read());"
-			 " out = []; [out.extend([k.value for k in n.value.keys if isinstance(k, ast.Constant) and isinstance(k.value, str)])"
-			 " for n in tree.body if isinstance(n, ast.Assign) and len(n.targets) == 1"
-			 " and isinstance(n.targets[0], ast.Name) and n.targets[0].id == 'coin_map'"
-			 " and isinstance(n.value, ast.Dict)]; print(' '.join(out))")
+	probe = (
+		"import ast, json; tree = ast.parse(open('/app/coins.py').read()); out = {};"
+		" [out.update({k.value: v.value for k, v in zip(n.value.keys, n.value.values)"
+		" if isinstance(k, ast.Constant) and isinstance(k.value, str)"
+		" and isinstance(v, ast.Constant) and isinstance(v.value, str)})"
+		" for n in tree.body if isinstance(n, ast.Assign) and len(n.targets) == 1"
+		" and isinstance(n.targets[0], ast.Name) and n.targets[0].id == 'coin_map'"
+		" and isinstance(n.value, ast.Dict)]; print(json.dumps(out))")
 	try:
 		proc = subprocess.run(
 			["docker", "run", "--rm", "--entrypoint", "python3", image, "-c", probe],
@@ -48,13 +63,63 @@ def image_coin_map_keys(image):
 	if proc.returncode != 0:
 		raise RuntimeError(
 			f"cannot probe utxo-plugin image {image}: {proc.stderr.strip()}")
-	return proc.stdout.split()
+	import json
+	return json.loads(proc.stdout)
+
+
+def image_coin_map_keys(image):
+	"""Ticker keys only, kept for callers that need the membership list."""
+	return list(image_coin_map(image))
+
+
+def coin_facts(branchpath, tickers):
+	"""Coin facts the adapter needs, read from the coin-configuration source.
+
+	The deployment already renders every daemon from this repository; reading
+	the same xbridge conf keeps the indexer, the daemon and the hub from
+	disagreeing about a divisor or a version byte. No value has a default here:
+	a missing or malformed key is a render error, not a guess.
+	"""
+	manifest = json.loads(load_template(manifest_content(branchpath)))
+	entries = {entry["ticker"].upper(): entry for entry in manifest}
+	facts = {}
+	for ticker in tickers:
+		entry = entries.get(ticker)
+		if entry is None:
+			raise ValueError(f"coin-configuration manifest has no entry for {ticker}")
+		conf = load_template(
+			branchpath.rstrip("/") + "/xbridge-confs/" + entry["xbridge_conf"])
+		values = {}
+		for line in conf.splitlines():
+			key, separator, value = line.partition("=")
+			if separator:
+				values[key.strip().upper()] = value.strip()
+		for key in ("COIN", "ADDRESSPREFIX", "SCRIPTPREFIX"):
+			if key not in values:
+				raise ValueError(
+					f"{ticker}: {entry['xbridge_conf']} has no {key}")
+		try:
+			facts[ticker] = {
+				"divisor": int(values["COIN"]),
+				"p2pkh": format(int(values["ADDRESSPREFIX"]), "02x"),
+				"p2sh": [format(int(values["SCRIPTPREFIX"]), "02x")],
+			}
+		except ValueError as error:
+			raise ValueError(
+				f"{ticker}: {entry['xbridge_conf']} has a non-numeric "
+				f"COIN/AddressPrefix/ScriptPrefix") from error
+		cashaddr = values.get("CASHADDRPREFIX")
+		if cashaddr:
+			facts[ticker]["cashaddr_prefix"] = cashaddr
+		if ticker == "BCH" and "cashaddr_prefix" not in facts[ticker]:
+			facts[ticker]["cashaddr_prefix"] = "bitcoincash"
+	return facts
 
 
 def validate_utxo_chains_against_image(chains, image):
 	"""Fail fast when the render selects chains the image cannot serve.
 
-	Returns the image's coin list on success. Raises ValueError naming the
+	Returns the image's coin map on success. Raises ValueError naming the
 	unsupported chains (action: rebuild the image or drop the chains), or
 	RuntimeError when the image cannot be probed at all.
 	"""
@@ -80,16 +145,16 @@ def validate_utxo_chains_against_source(chains, source_keys):
 	contrast the image-probe branch, where RuntimeError means
 	probe failure and only warns, while ValueError aborts).
 	"""
-	missing = missing_chain_support(chains, source_keys or [])
+	missing = missing_chain_support(chains, source_keys or {})
 	if missing:
 		raise RuntimeError(
 			f"utxo-plugin source lacks coin support for "
 			f"{', '.join(missing)} (source serves: "
-			f"{', '.join(source_keys or [])}); fix the selection or "
+			f"{', '.join(source_keys or {})}); fix the selection or "
 			f"extend the source coin_map.")
-	return list(source_keys or [])
+	return source_keys if source_keys is not None else {}
 
-def utxo_template(used_ip, subnet, utxo_plugin, data):
+def utxo_template(used_ip, subnet, utxo_plugin, data, coin_map=None, branchpath=None):
 
 	# create dictionary to access utxo coin RPC port and container IP address
 	utxo_coin_dict = {'BLOCK':{'ip':data['snode_ip'],'rpc_port':'41414'}}
@@ -105,8 +170,11 @@ def utxo_template(used_ip, subnet, utxo_plugin, data):
 	final_data = {}
 	final_data['full_utxo_plugin_chains'] = []
 	utxo_container_ip = {}
+	coin_map = coin_map or {}
 	for coin_name in utxo_coins:
-		utxo_plugin_chain = {'name':coin_name}
+		if coin_name not in coin_map:
+			raise ValueError(f"utxo-plugin coin_map has no class for {coin_name}")
+		utxo_plugin_chain = {'name':coin_name, 'coin_class':coin_map[coin_name]}
 		ip_name = f'{coin_name.lower()}_utxo_plugin_ip'
 		custom_ip = random_ip(subnet)
 		if ip_name in used_ip['ip'].keys():
@@ -126,5 +194,17 @@ def utxo_template(used_ip, subnet, utxo_plugin, data):
 
 	# prepare data to fill in plugin adapter container data in autobuild/templates/utxo.j2
 	final_data['adapter_utxo_plugin_list'] = ','.join([f'{coin_name}:{utxo_container_ip[coin_name]}' for coin_name in utxo_coins])
+	if branchpath is None:
+		raise ValueError("utxo_template needs branchpath to read coin facts")
+	facts = coin_facts(branchpath, utxo_coins)
+	adapter_config = {}
+	for chain in final_data['full_utxo_plugin_chains']:
+		coin_name = chain['name']
+		entry = dict(facts[coin_name])
+		entry['daemon_url'] = (
+			f"http://${{RPC_USER}}:${{RPC_PASSWORD}}@"
+			f"{chain['daemon_addr']}:{chain['rpc_port']}/")
+		adapter_config[coin_name] = entry
+	final_data['adapter_coin_config'] = json.dumps(adapter_config, separators=(',', ':'))
 
 	return [used_ip, final_data]
