@@ -52,7 +52,7 @@ parser.add_argument('--branchpath', default='https://raw.githubusercontent.com/b
 parser.add_argument('--utxo-plugin-source', default=None, help='utxo-plugin coin-map source: URL or local coins.py path')
 parser.add_argument('--xquerytag', help="Override XQuery images tag", default='latest')
 parser.add_argument('--prunecache', help='Reinit .known_hosts, .known_volumes, .env and .cache files', action='store_true')
-parser.add_argument('--subnet', help='Subnet to configure docker-compose network', default="172.31.0.0/20")
+parser.add_argument('--subnet', help='Subnet to configure docker-compose network', default="172.31.0.0/16")
 
 args = parser.parse_args()
 SOURCE = args.source

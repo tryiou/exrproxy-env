@@ -4,7 +4,7 @@ from autobuild.utils.autoconfig import random_ip
 
 def xq_template(used_ip, subnet, query, data):
 
-	# subnet = '172.31.0.0/20'
+	# subnet = '172.31.0.0/16'
 	
 	# ips = [str(ip) for ip in ipaddress.IPv4Network(subnet)][2::]
 	hasura_port = 8080

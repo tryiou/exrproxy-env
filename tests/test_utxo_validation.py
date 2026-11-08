@@ -206,7 +206,7 @@ class TestUtxoTemplateMapping(unittest.TestCase):
         }
         with patch("autobuild.utils.utxo.coin_facts", return_value=facts):
             used, out = utxo_template(
-                {"ip": {}}, "172.31.0.0/20", plugin, data,
+                {"ip": {}}, "172.31.0.0/16", plugin, data,
                 {"BLOCK": "Blocknet", "XVG": "Verge"}, "/bcf")
         classes = {c["name"]: c["coin_class"] for c in out["full_utxo_plugin_chains"]}
         self.assertEqual({"BLOCK": "Blocknet", "XVG": "Verge"}, classes)
