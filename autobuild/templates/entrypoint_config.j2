@@ -5,7 +5,7 @@ cat > /opt/blockchain/config/{{ config_name }}.conf << EOL
 datadir=/opt/blockchain/data
 {% if config_name == 'unobtanium' %}
 # uno daemon need '-reindex' launch option for first launch.
-rpcthreads=8
+rpcthreads={{ daemon_rpc_threads }}
 {% endif %}
 {% if config_name == 'syscoin' and not writeNEVM %}
 # UTXO-only deployment: an empty NEVM publisher keeps the daemon from

@@ -32,6 +32,10 @@ OUTPUT_PATH = './'
 IPS_CACHE = '.cache_ip'
 UTXO_PLUGIN_METHODS = ['getutxos','getrawtransaction','getrawmempool','getblockcount','sendrawtransaction','gettransaction','getblock','getblockhash','heights','fees','getbalance','gethistory','ping']
 
+# Indexer clients hold several concurrent RPC calls per coin; the daemon's
+# four-thread default starves them and Blockbook then hits its 25 s timeout.
+DAEMON_RPC_THREADS = 32
+
 # lbcd/lbcwallet (btcd-family) expose the node's internal RPC 10000 ports above
 # the wallet facade's legacy RPC port. This is an lbcd/lbcwallet-specific
 # offset, NOT the vanilla btcd convention (which uses +2).
@@ -569,6 +573,7 @@ def processconfigs(datalist, BRANCHPATH):
 					'node_p2p_port': node_p2p_port,
 					'wallet_rpc_port': wallet_rpc_port,
 					'node_rpc_port': node_rpc_port,
+					'daemon_rpc_threads': DAEMON_RPC_THREADS,
 					'coin_params': _coin_params(daemon.get('image', '')),
 					})
 				config_name = './scripts/entrypoints/start-{}.sh'.format(daemon['configName'])
