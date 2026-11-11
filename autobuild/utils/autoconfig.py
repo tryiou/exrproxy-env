@@ -113,6 +113,39 @@ def chain_lookup(BASE_URL, s):
 def manifest_content(BASE_URL):
 	return BASE_URL + '/manifest-latest.json'
 
+def base_chain_ticker(blocknet_node):
+	"""The chain the Blocknet node serves in-process.
+
+	SNODE/TNODE run mainnet and serve BLOCK; TESTSNODE/TESTTNODE run testnet
+	and serve TBLOCK. The base wallet is never a standalone container, so its
+	endpoint is the node's own.
+	"""
+	if not blocknet_node:
+		raise ValueError(
+			"no Blocknet node in the stack: the base chain has no server")
+	return 'BLOCK' if blocknet_node.lower() in ('snode', 'tnode') else 'TBLOCK'
+
+def coin_rpc_port(branchpath, ticker):
+	"""A coin's RPC port, read from the deployed coin configuration.
+
+	The manifest names the coin's xbridge conf; that conf's ``Port`` is the
+	daemon's RPC port. No default: a missing entry or a conf without a Port is
+	a render error, not a guess.
+	"""
+	manifest = json.loads(load_template(manifest_content(branchpath)))
+	entry = next(
+		(item for item in manifest if item['ticker'].upper() == ticker.upper()),
+		None)
+	if entry is None:
+		raise ValueError(f'coin configuration has no entry for {ticker}')
+	conf = load_template(
+		branchpath.rstrip('/') + '/xbridge-confs/' + entry['xbridge_conf'])
+	for line in conf.splitlines():
+		key, separator, value = line.partition('=')
+		if separator and key.strip().upper() == 'PORT':
+			return int(value.strip())
+	raise ValueError(f'{ticker}: {entry["xbridge_conf"]} has no Port')
+
 def wallet_conf_file(BASE_URL, wallet_conf_name):
 	return BASE_URL + "/wallet-confs/" + wallet_conf_name
 

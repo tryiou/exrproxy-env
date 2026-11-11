@@ -5,7 +5,7 @@
     restart: unless-stopped
     environment:
       COIN: "{{ chain.coin_class }}"
-      NET: 'mainnet'
+      NET: '{{ chain.net }}'
       DB_ENGINE: 'rocksdb'
       DB_DIRECTORY: '/app/electrumx/{{ chain.name.upper() }}'
       # RPC is for operators inside the container; only the wallet-facing

@@ -1,4 +1,5 @@
 from rich import print
+from autobuild.utils import autoconfig
 from autobuild.utils.autoconfig import load_template, manifest_content, random_ip
 import ast
 import json
@@ -157,11 +158,38 @@ def validate_utxo_chains_against_source(chains, source_keys):
 def utxo_template(used_ip, subnet, utxo_plugin, data, coin_map=None, branchpath=None):
 
 	# create dictionary to access utxo coin RPC port and container IP address
-	utxo_coin_dict = {'BLOCK':{'ip':data['snode_ip'],'rpc_port':'41414'}}
 	utxo_coins = [x['name'] for x in utxo_plugin['chains']]
+	utxo_coin_dict = {}
 	for daemon in data['daemons']:
 		if daemon['name'] in utxo_coins:
-			utxo_coin_dict[daemon['name']] = {'ip':daemon['ip'], 'rpc_port':daemon['rpcPort']}
+			utxo_coin_dict[daemon['name']] = {
+				'ip': daemon['ip'],
+				'rpc_port': daemon['rpcPort'],
+				# ElectrumX resolves a coin by NAME *and* network, so the
+				# indexer must be told the network the daemon runs.
+				'net': 'testnet' if daemon.get('testnet') else 'mainnet',
+			}
+	# The base chain (BLOCK/TBLOCK) has no daemon container: the Blocknet node
+	# serves its wallet in-process, so its endpoint is the node's own address
+	# and RPC port. Which chain that is depends on the node the stack runs.
+	base_chain = autoconfig.base_chain_ticker(data.get('blocknet_node'))
+	if base_chain in utxo_coins:
+		node_ip = data.get(f"{data['blocknet_node'].lower()}_ip")
+		if not node_ip:
+			raise ValueError(
+				f"utxo-plugin serves {base_chain} but the stack has no "
+				f"{data['blocknet_node']} address to reach it on")
+		utxo_coin_dict[base_chain] = {
+			'ip': node_ip,
+			'rpc_port': autoconfig.coin_rpc_port(branchpath, base_chain),
+			'net': ('testnet' if data['blocknet_node'].lower() in
+			        ('testsnode', 'testtnode') else 'mainnet'),
+		}
+	for coin_name in utxo_coins:
+		if coin_name not in utxo_coin_dict:
+			raise ValueError(
+				f"utxo-plugin serves {coin_name} but no daemon or node "
+				f"provides it in this stack")
 
 	# prepare data to fill in utxo plugin container data in autobuild/templates/utxo.j2
 #	print("utxo_coin_dict: ", utxo_coin_dict)
@@ -189,7 +217,9 @@ def utxo_template(used_ip, subnet, utxo_plugin, data, coin_map=None, branchpath=
 		utxo_container_ip[coin_name] = utxo_plugin_chain['ip']
 		utxo_plugin_chain['rpc_port'] = utxo_coin_dict[coin_name]['rpc_port']
 		utxo_plugin_chain['daemon_addr'] = utxo_coin_dict[coin_name]['ip']
-		utxo_plugin_chain['depends_on'] = coin_name if coin_name != 'BLOCK' else 'snode'
+		utxo_plugin_chain['net'] = utxo_coin_dict[coin_name]['net']
+		utxo_plugin_chain['depends_on'] = (
+			data['blocknet_node'] if coin_name == base_chain else coin_name)
 		final_data['full_utxo_plugin_chains'].append(utxo_plugin_chain)
 
 	# prepare data to fill in plugin adapter container data in autobuild/templates/utxo.j2

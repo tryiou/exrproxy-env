@@ -195,6 +195,7 @@ class TestUtxoTemplateMapping(unittest.TestCase):
     def test_each_chain_gets_its_coin_class_and_adapter_facts(self):
         plugin = {"chains": [{"name": "BLOCK"}, {"name": "XVG"}]}
         data = {
+            "blocknet_node": "snode",
             "daemons": [
                 {"name": "XVG", "ip": "172.31.10.73", "rpcPort": "20102"},
             ],
@@ -204,7 +205,9 @@ class TestUtxoTemplateMapping(unittest.TestCase):
             "BLOCK": {"divisor": 100000000, "p2pkh": "1a", "p2sh": ["1c"]},
             "XVG": {"divisor": 1000000, "p2pkh": "1e", "p2sh": ["21"]},
         }
-        with patch("autobuild.utils.utxo.coin_facts", return_value=facts):
+        with patch("autobuild.utils.utxo.coin_facts", return_value=facts), \
+                patch("autobuild.utils.utxo.autoconfig.coin_rpc_port",
+                      return_value=41414):
             used, out = utxo_template(
                 {"ip": {}}, "172.31.0.0/16", plugin, data,
                 {"BLOCK": "Blocknet", "XVG": "Verge"}, "/bcf")
@@ -214,6 +217,63 @@ class TestUtxoTemplateMapping(unittest.TestCase):
         config = json.loads(out["adapter_coin_config"])
         self.assertEqual(1000000, config["XVG"]["divisor"])
         self.assertIn("${RPC_USER}", config["BLOCK"]["daemon_url"])
+
+    def test_base_chain_is_reached_on_the_node_not_a_daemon(self):
+        # BLOCK has no container: the node serves it, so the indexer must be
+        # pointed at the node's address and the node's RPC port.
+        plugin = {"chains": [{"name": "BLOCK"}]}
+        data = {"blocknet_node": "snode", "daemons": [], "snode_ip": "172.31.5.204"}
+        facts = {"BLOCK": {"divisor": 100000000, "p2pkh": "1a", "p2sh": ["1c"]}}
+        with patch("autobuild.utils.utxo.coin_facts", return_value=facts), \
+                patch("autobuild.utils.utxo.autoconfig.coin_rpc_port",
+                      return_value=41414):
+            _, out = utxo_template(
+                {"ip": {}}, "172.31.0.0/16", plugin, data,
+                {"BLOCK": "Blocknet"}, "/bcf")
+        chain = out["full_utxo_plugin_chains"][0]
+        self.assertEqual("172.31.5.204", chain["daemon_addr"])
+        self.assertEqual(41414, chain["rpc_port"])
+        self.assertEqual("snode", chain["depends_on"])
+
+    def test_testsnode_serves_tblock(self):
+        # A testnet node serves TBLOCK, so the base chain follows the node.
+        plugin = {"chains": [{"name": "TBLOCK"}]}
+        data = {"blocknet_node": "testsnode", "daemons": [],
+                "testsnode_ip": "172.31.5.9"}
+        facts = {"TBLOCK": {"divisor": 100000000, "p2pkh": "8b", "p2sh": ["13"]}}
+        with patch("autobuild.utils.utxo.coin_facts", return_value=facts), \
+                patch("autobuild.utils.utxo.autoconfig.coin_rpc_port",
+                      return_value=41419):
+            _, out = utxo_template(
+                {"ip": {}}, "172.31.0.0/16", plugin, data,
+                {"TBLOCK": "BlocknetTestnet"}, "/bcf")
+        chain = out["full_utxo_plugin_chains"][0]
+        self.assertEqual("172.31.5.9", chain["daemon_addr"])
+        self.assertEqual(41419, chain["rpc_port"])
+        self.assertEqual("testsnode", chain["depends_on"])
+
+    def test_a_chain_with_no_server_is_fatal(self):
+        # Selecting a coin the stack neither runs nor serves must fail the
+        # render, never emit an indexer pointed at nothing.
+        plugin = {"chains": [{"name": "RVN"}]}
+        data = {"blocknet_node": "snode", "daemons": [], "snode_ip": "172.31.5.204"}
+        with patch("autobuild.utils.utxo.coin_facts", return_value={}), \
+                patch("autobuild.utils.utxo.autoconfig.coin_rpc_port",
+                      return_value=41414):
+            with self.assertRaises(ValueError) as ctx:
+                utxo_template(
+                    {"ip": {}}, "172.31.0.0/16", plugin, data,
+                    {"RVN": "Ravencoin"}, "/bcf")
+        self.assertIn("RVN", str(ctx.exception))
+
+    def test_a_stack_without_a_node_cannot_serve_the_base_chain(self):
+        plugin = {"chains": [{"name": "BLOCK"}]}
+        data = {"daemons": []}
+        with patch("autobuild.utils.utxo.coin_facts", return_value={}):
+            with self.assertRaises(ValueError):
+                utxo_template(
+                    {"ip": {}}, "172.31.0.0/16", plugin, data,
+                    {"BLOCK": "Blocknet"}, "/bcf")
 
 
 class TestSnodeCoinList(unittest.TestCase):
