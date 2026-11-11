@@ -25,9 +25,18 @@ def make_executable(path):
   os.chmod(path, mode)
 
 def write_text_file(filename, data):
-  with open(filename,'w') as file:
+  """Write ``data`` to ``filename`` without ever truncating the old file.
+
+  A render that fails halfway must leave the previous file intact: the
+  compose file is what the deploy step consumes, so a partial write would
+  hand it a stack that cannot start. Write a sibling temporary file, then
+  rename it over the target, which is atomic on the same filesystem.
+  """
+  tmp = '{}.tmp'.format(filename)
+  with open(tmp,'w') as file:
     file.write(data)
-    print(f"Wrote {filename}")
+  os.replace(tmp, filename)
+  print(f"Wrote {filename}")
 
 def write_yaml_file(filename, data):
   with open(filename, 'w') as file:

@@ -127,6 +127,7 @@ def processcustom(customlist, SUBNET, BRANCHPATH, utxo_supported_chains=None):
 	daemons_list = []
 	configFiles = {}
 	binFiles = {}
+	rendered_files = []
 	daemonFamily = {}
 	daemonStem = {}
 	rpc_threads = 0
@@ -466,7 +467,13 @@ def processcustom(customlist, SUBNET, BRANCHPATH, utxo_supported_chains=None):
 		# custom_template = J2_ENV2.get_template(custom_template_fname)
 		rendered_data = custom_template.render(c)
 		rendered_filename = '{}{}.yml'.format(OUTPUT_PATH, c['name'])
-		write_text_file(rendered_filename, rendered_data)
+		# The compose file is what the deploy step consumes, so it is written
+		# last: processconfigs() can still raise (a missing wallet conf, a
+		# Blockbook chain the source cannot serve), and a failed render must
+		# leave the previous file exactly as it was. write_text_file() renames
+		# the new content over the target in one step, so the file on disk is
+		# never a partial render.
+		rendered_files.append((rendered_filename, rendered_data))
 
 		plugins = ''
 		if len(customlist[0]['plugins']) >= 1:
@@ -476,8 +483,23 @@ def processcustom(customlist, SUBNET, BRANCHPATH, utxo_supported_chains=None):
 
 		customlist[0]['xrouter_plugins'] = plugins
 		customlist[0]['hydra'] = ','.join([x.upper() for x in customlist[0]['hydra']])
+		# Held until the whole render has succeeded: processconfigs() and
+		# processdashboard() run after this function and can still raise, and
+		# the compose file must not be replaced by a partial render.
+		customlist[0]['rendered_files'] = rendered_files
 
 		return([c])
+
+
+def write_rendered_stack(datalist):
+	"""Write the compose file(s) a successful render produced.
+
+	Called only after every render stage has returned, so a failure anywhere
+	in the pipeline leaves the previous compose file untouched.
+	"""
+	for data in datalist:
+		for rendered_filename, rendered_data in data.get('rendered_files', []):
+			write_text_file(rendered_filename, rendered_data)
 
 
 def processconfigs(datalist, BRANCHPATH):
