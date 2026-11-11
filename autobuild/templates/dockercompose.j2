@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
 {% for daemon in daemons %}
 {% if daemon.name|upper != 'BLOCK' and daemon.name|upper != 'TBLOCK' %}
