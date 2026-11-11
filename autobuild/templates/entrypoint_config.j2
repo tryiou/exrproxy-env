@@ -3,8 +3,9 @@
 {% if daemon_family is not defined or daemon_family != 'btcd' %}
 cat > /opt/blockchain/config/{{ config_name }}.conf << EOL
 datadir=/opt/blockchain/data
-{% if config_name == 'unobtanium' %}
-# uno daemon need '-reindex' launch option for first launch.
+{% if config_name in rpc_thread_coins %}
+# Blockbook keeps several RPC calls in flight per coin; the four-thread
+# default starves them and the client hits its 25 s timeout.
 rpcthreads={{ daemon_rpc_threads }}
 {% endif %}
 {% if config_name == 'syscoin' and not writeNEVM %}
