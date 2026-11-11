@@ -18,7 +18,6 @@
       DB_SCHEMA: {{ dex.schema_name }}
       REDIS_HOST: {{ redis_ip }}
       REDIS_DATABASE: {{ dex.redis_db }}
-      XQ_NUM_WORKERS: {{ xq_num_workers }}
       NUM_SAFETY_BLOCKS: {{ dex.num_safety_blocks }}
       TARGET_SLEEP_TIME: {{ dex.target_sleep_time }}
       ALEMBIC_SLEEP: {{ dex.alembic_sleep }} # Each xq-engine sleeps different time before running alembic - avoids db contention
