@@ -21,9 +21,7 @@
     stop_signal: SIGINT
     stop_grace_period: 5m
     volumes:
-      # Fresh ElectrumX tree: the old utxo_plugin/<TICKER> database is a
-      # different schema and stays untouched for rollback.
-      - {{ utxo_plugin_volume }}/utxo_plugin/electrumx/{{ chain.name.upper() }}:/app/electrumx/{{ chain.name.upper() }}
+      - {{ utxo_plugin_volume }}/utxo_plugin/{{ chain.name.upper() }}:/app/electrumx/{{ chain.name.upper() }}
     logging:
       driver: "json-file"
       options:
