@@ -31,16 +31,16 @@ OUTPUT_PATH = './'
 IPS_CACHE = '.cache_ip'
 UTXO_PLUGIN_METHODS = ['getutxos','getrawtransaction','getrawmempool','getblockcount','sendrawtransaction','gettransaction','getblock','getblockhash','heights','fees','getbalance','gethistory','ping']
 
-# Indexer clients hold several concurrent RPC calls per coin; the daemon's
-# four-thread default starves them and Blockbook then hits its 25 s timeout.
+# The indexer holds several concurrent RPC calls per coin; the daemon's
+# four-thread default starves them while the index is catching up.
 DAEMON_RPC_THREADS = 32
 
 # A daemon whose RPC threads block on the chain lock (IBD) fills its 16-entry
-# queue and then rejects callers with a plain-text 503 Blockbook cannot parse.
+# queue and then rejects callers with a plain-text 503.
 DAEMON_RPC_WORKQUEUE = 256
 
 # Coins that need the non-default values above; every other coin keeps the
-# daemon's own defaults.
+# daemon's own defaults. Re-measure before widening the list.
 RPC_THREAD_COINS = ('unobtanium', 'digibyte')
 RPC_WORKQUEUE_COINS = ('digibyte',)
 
@@ -452,7 +452,7 @@ def processcustom(customlist, SUBNET, BRANCHPATH, utxo_supported_chains=None):
 		rendered_filename = '{}{}.yml'.format(OUTPUT_PATH, c['name'])
 		# The compose file is what the deploy step consumes, so it is written
 		# last: processconfigs() can still raise (a missing wallet conf, a
-		# Blockbook chain the source cannot serve), and a failed render must
+		# utxo chain the source cannot serve), and a failed render must
 		# leave the previous file exactly as it was. write_text_file() renames
 		# the new content over the target in one step, so the file on disk is
 		# never a partial render.
