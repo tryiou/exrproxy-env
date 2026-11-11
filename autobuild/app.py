@@ -4,7 +4,6 @@ import stat
 import json
 import re
 import ipaddress
-import subprocess
 from jinja2 import Environment, FileSystemLoader, Template, BaseLoader
 from autobuild.utils.autoconfig import *
 import autobuild.utils.autoconfig as autoconfig
@@ -77,52 +76,6 @@ def _is_sys(name):
 	"""The SYS daemon, case-insensitively (daemon names are upper-cased
 	elsewhere, but YAML input is free-form)."""
 	return isinstance(name, str) and name.upper() == 'SYS'
-
-
-def _coin_params(image, timeout=60):
-	"""Runtime params declared at image build (coin-params.sh content).
-
-	Returns a dict {launch_flags, addnodes, file_logging, tail_filter};
-	empty dict when the image is absent locally (normal render-then-pull
-	flow, all Hub images), docker is missing, or anything fails — which
-	renders today's exact scripts (graceful fallback). Values are parsed,
-	never sourced: strict VAR="value" lines only.
-	"""
-	empty = {'launch_flags': '', 'addnodes': [],
-	         'file_logging': False, 'tail_filter': ''}
-	if not image:
-		return empty
-	try:
-		present = subprocess.run(
-			["docker", "image", "inspect", image],
-			capture_output=True, timeout=timeout)
-		if present.returncode != 0:
-			return empty
-		proc = subprocess.run(
-			["docker", "run", "--rm", "--entrypoint", "cat", image,
-			 "/opt/blockchain/coin-params.sh"],
-			capture_output=True, text=True, timeout=timeout)
-	except (OSError, subprocess.TimeoutExpired):
-		return empty
-	if proc.returncode != 0:
-		return empty
-	vals = {}
-	for line in (proc.stdout or "").splitlines():
-		m = re.match(r'^([A-Z_]+)="([^"]*)"$', line.strip())
-		if m:
-			vals[m.group(1)] = m.group(2)
-	parsed = {'launch_flags': vals.get('LAUNCH_FLAGS', ''),
-	          'addnodes': vals.get('ADDNODES', '').split(),
-	          'file_logging': vals.get('FILE_LOGGING', '') == '1',
-	          'tail_filter': vals.get('TAIL_FILTER', '')}
-	for token in parsed['launch_flags'].split() + parsed['addnodes']:
-		if re.search(r'[^A-Za-z0-9_.:=-]', token):
-			print("coin-params from '%s' has an unsafe token %r; ignoring all params" % (image, token))
-			return empty
-	if "'" in parsed['tail_filter']:
-		print("coin-params from '%s' has a quoted tail filter; ignoring all params" % image)
-		return empty
-	return parsed
 
 
 def processcustom(customlist, SUBNET, BRANCHPATH, utxo_supported_chains=None):
@@ -579,7 +532,6 @@ def processconfigs(datalist, BRANCHPATH):
 					'node_rpc_port': node_rpc_port,
 					'daemon_rpc_threads': DAEMON_RPC_THREADS,
 					'rpc_thread_coins': RPC_THREAD_COINS,
-					'coin_params': _coin_params(daemon.get('image', '')),
 					})
 				config_name = './scripts/entrypoints/start-{}.sh'.format(daemon['configName'])
 				print('Creating File: {}'.format(config_name))

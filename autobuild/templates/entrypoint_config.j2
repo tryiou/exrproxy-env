@@ -4,8 +4,6 @@
 cat > /opt/blockchain/config/{{ config_name }}.conf << EOL
 datadir=/opt/blockchain/data
 {% if config_name in rpc_thread_coins %}
-# Blockbook keeps several RPC calls in flight per coin; the four-thread
-# default starves them and the client hits its 25 s timeout.
 rpcthreads={{ daemon_rpc_threads }}
 {% endif %}
 {% if config_name == 'syscoin' and not writeNEVM %}
@@ -44,32 +42,35 @@ gethcommandline=--graphql.vhosts=*
 
 EOL
 
-{% if coin_params.launch_flags or coin_params.addnodes or coin_params.file_logging %}
-# Runtime needs declared at image build (coin-params.sh inside the image):
-# launch flags, bootstrap peers and file-log mirroring are rendered here as
-# literal lines — no reader scaffolding, no per-coin branches. Coins without
-# params render none of this (byte-identical to the historical script).
-{% for _node in coin_params.addnodes %}
-echo "addnode={{ _node }}" >> /opt/blockchain/config/{{ config_name }}.conf
-{% endfor %}
-{% if coin_params.file_logging %}
-{% if coin_params.tail_filter %}
-tail -F /opt/blockchain/data/debug.log | grep --line-buffered -vE -- '{{ coin_params.tail_filter }}' &
-{% else %}
-tail -F /opt/blockchain/data/debug.log &
-{% endif %}
-{% endif %}
+# Runtime needs declared at image build (coin-params.sh inside the image).
+# Read here, at container start, from the image the daemon is running in:
+# the file ships with the image, so a render never depends on local image
+# state and never spawns a container. Values are parsed, never sourced.
+_coin_params=/opt/blockchain/coin-params.sh
+_launch_flags=''
+if [ -f "$_coin_params" ]; then
+  _launch_flags=$(sed -n 's/^LAUNCH_FLAGS="\(.*\)"$/\1/p' "$_coin_params")
+  for _node in $(sed -n 's/^ADDNODES="\(.*\)"$/\1/p' "$_coin_params"); do
+    echo "addnode=$_node" >> /opt/blockchain/config/{{ config_name }}.conf
+  done
+  if [ "$(sed -n 's/^FILE_LOGGING="\(.*\)"$/\1/p' "$_coin_params")" = "1" ]; then
+    _tail_filter=$(sed -n 's/^TAIL_FILTER="\(.*\)"$/\1/p' "$_coin_params")
+    if [ -n "$_tail_filter" ]; then
+      tail -F /opt/blockchain/data/debug.log | grep --line-buffered -vE -- "$_tail_filter" &
+    else
+      tail -F /opt/blockchain/data/debug.log &
+    fi
+  fi
+fi
 # ensure docker runs daemon as pid1
 # launch_flags suppressed when NEVM is enabled: an image off-switch would kill bundled SysGeth.
 {% if config_name == 'syscoin' %}
 # Syscoin's EVM off-switch lives in its conf above, never as a launch flag.
 exec $1 -conf=/opt/blockchain/config/{{ config_name }}.conf
-{% else %}
-exec $1 -conf=/opt/blockchain/config/{{ config_name }}.conf{% if coin_params.launch_flags and not writeNEVM %} {{ coin_params.launch_flags }}{% endif %}
-{% endif %}
-{% else %}
-# ensure docker runs daemon as pid1
+{% elif writeNEVM %}
 exec $1 -conf=/opt/blockchain/config/{{ config_name }}.conf
+{% else %}
+exec $1 -conf=/opt/blockchain/config/{{ config_name }}.conf $_launch_flags
 {% endif %}
 {% else %}
 {# btcd-family: define the Go-format runtime config (ports + rpc) in the
