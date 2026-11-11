@@ -131,6 +131,20 @@ def processcustom(customlist, SUBNET, BRANCHPATH, utxo_supported_chains=None):
 	daemonFamily = {}
 	daemonStem = {}
 	rpc_threads = 0
+	# A repeated daemon would render the same compose service twice, which
+	# Compose rejects ("mapping key already defined") after the render has
+	# already reported success. Refuse the input before anything is read or
+	# written.
+	for c in customlist:
+		seen_daemons = {}
+		for i, daemon in enumerate(c.get('daemons', [])):
+			key = str(daemon.get('name', '')).upper()
+			if key in seen_daemons:
+				raise RuntimeError(
+					"daemon '{}' is listed twice in the input (entries {} and {}); "
+					"refusing to render a stack with a duplicate service".format(
+						daemon.get('name'), seen_daemons[key], i))
+			seen_daemons[key] = i
 	manifest_config = autoconfig.load_template(autoconfig.manifest_content(BRANCHPATH))
 	manifest = json.loads(Template(manifest_config).render())
 	for blockchain in manifest:
