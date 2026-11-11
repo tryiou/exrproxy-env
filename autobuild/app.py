@@ -35,9 +35,14 @@ UTXO_PLUGIN_METHODS = ['getutxos','getrawtransaction','getrawmempool','getblockc
 # four-thread default starves them and Blockbook then hits its 25 s timeout.
 DAEMON_RPC_THREADS = 32
 
-# Coins whose daemon services more concurrent RPC calls than its default four
-# threads: the generated entrypoint writes rpcthreads for these only.
+# A daemon whose RPC threads block on the chain lock (IBD) fills its 16-entry
+# queue and then rejects callers with a plain-text 503 Blockbook cannot parse.
+DAEMON_RPC_WORKQUEUE = 256
+
+# Coins that need the non-default values above; every other coin keeps the
+# daemon's own defaults.
 RPC_THREAD_COINS = ('unobtanium', 'digibyte')
+RPC_WORKQUEUE_COINS = ('digibyte',)
 
 # lbcd/lbcwallet (btcd-family) expose the node's internal RPC 10000 ports above
 # the wallet facade's legacy RPC port. This is an lbcd/lbcwallet-specific
@@ -531,7 +536,9 @@ def processconfigs(datalist, BRANCHPATH):
 					'wallet_rpc_port': wallet_rpc_port,
 					'node_rpc_port': node_rpc_port,
 					'daemon_rpc_threads': DAEMON_RPC_THREADS,
+					'daemon_rpc_workqueue': DAEMON_RPC_WORKQUEUE,
 					'rpc_thread_coins': RPC_THREAD_COINS,
+					'rpc_workqueue_coins': RPC_WORKQUEUE_COINS,
 					})
 				config_name = './scripts/entrypoints/start-{}.sh'.format(daemon['configName'])
 				print('Creating File: {}'.format(config_name))

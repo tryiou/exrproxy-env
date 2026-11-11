@@ -6,6 +6,9 @@ datadir=/opt/blockchain/data
 {% if config_name in rpc_thread_coins %}
 rpcthreads={{ daemon_rpc_threads }}
 {% endif %}
+{% if config_name in rpc_workqueue_coins %}
+rpcworkqueue={{ daemon_rpc_workqueue }}
+{% endif %}
 {% if config_name == 'syscoin' and not writeNEVM %}
 # UTXO-only deployment: an empty NEVM publisher keeps the daemon from
 # bootstrapping its bundled SysGeth chain, so only the core wallet runs.

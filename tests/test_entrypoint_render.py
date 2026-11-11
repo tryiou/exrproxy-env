@@ -78,6 +78,7 @@ class EntrypointRenderTestCase(unittest.TestCase):
 
     def test_thread_overrides_are_written_per_coin(self):
         self.assertIn('rpcthreads=32', render(config_name='digibyte'))
+        self.assertIn('rpcworkqueue=256', render(config_name='digibyte'))
         self.assertNotIn('rpcthreads', render(config_name='raven'))
 
     def test_render_never_shells_out(self):
