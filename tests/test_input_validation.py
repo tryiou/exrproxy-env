@@ -28,5 +28,17 @@ class DuplicateDaemonTestCase(unittest.TestCase):
             self._run(['RVN', 'rvn'])
 
 
+class DaemonNameCaseTestCase(unittest.TestCase):
+    """A daemon name reaches every lookup as its upper-case ticker."""
+
+    def test_a_lower_case_name_is_normalised_before_the_manifest_lookup(self):
+        customlist = [{'daemons': [{'name': 'rvn', 'type': 'chain'}]}]
+        # the manifest source does not exist, so the render stops there; the
+        # point is that the name was normalised before any lookup saw it
+        with self.assertRaises(Exception):
+            processcustom(customlist, '172.31.0.0/16', '/nonexistent/')
+        self.assertEqual('RVN', customlist[0]['daemons'][0]['name'])
+
+
 if __name__ == '__main__':
     unittest.main()
