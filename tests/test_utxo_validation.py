@@ -160,27 +160,30 @@ class TestCoinFacts(unittest.TestCase):
         with patch.object(utxo_mod, "load_template", side_effect=loader):
             return coin_facts("/bcf", [ticker])
 
-    def test_reads_divisor_and_prefixes_from_the_conf(self):
+    def test_reads_prefixes_from_the_conf(self):
         facts = self._facts(
-            "COIN=100000000\nAddressPrefix=26\nScriptPrefix=28\n")
+            "AddressPrefix=26\nScriptPrefix=28\n")
         self.assertEqual(
-            {"BLOCK": {"divisor": 100000000, "p2pkh": "1a", "p2sh": ["1c"]}},
+            {"BLOCK": {"p2pkh": "1a", "p2sh": ["1c"]}},
             facts)
 
-    def test_six_decimal_coin_keeps_its_divisor(self):
+    def test_a_six_decimal_coin_needs_no_divisor(self):
+        # The bridge never prices an amount: the daemon reads satoshis. Only the
+        # address prefix is read, so a coin with a different divisor is served
+        # the same way.
         facts = self._facts(
-            "COIN=1000000\nAddressPrefix=30\nScriptPrefix=33\n", "XVG")
-        self.assertEqual(1000000, facts["XVG"]["divisor"])
+            "AddressPrefix=30\nScriptPrefix=33\n", "XVG")
+        self.assertEqual({"p2pkh": "1e", "p2sh": ["21"]}, facts["XVG"])
 
     def test_cashaddr_prefix_is_passed_through(self):
         facts = self._facts(
-            "COIN=100000000\nAddressPrefix=0\nScriptPrefix=5\n"
+            "AddressPrefix=0\nScriptPrefix=5\n"
             "CashAddrPrefix=bitcoincash\n", "BCH")
         self.assertEqual("bitcoincash", facts["BCH"]["cashaddr_prefix"])
 
     def test_missing_fact_is_fatal_not_defaulted(self):
         with self.assertRaises(ValueError):
-            self._facts("COIN=100000000\nScriptPrefix=28\n")
+            self._facts("ScriptPrefix=28\n")
 
     def test_unknown_ticker_is_fatal(self):
         import autobuild.utils.utxo as utxo_mod
@@ -202,8 +205,8 @@ class TestUtxoTemplateMapping(unittest.TestCase):
             "snode_ip": "172.31.5.204",
         }
         facts = {
-            "BLOCK": {"divisor": 100000000, "p2pkh": "1a", "p2sh": ["1c"]},
-            "XVG": {"divisor": 1000000, "p2pkh": "1e", "p2sh": ["21"]},
+            "BLOCK": {"p2pkh": "1a", "p2sh": ["1c"]},
+            "XVG": {"p2pkh": "1e", "p2sh": ["21"]},
         }
         with patch("autobuild.utils.utxo.coin_facts", return_value=facts), \
                 patch("autobuild.utils.utxo.autoconfig.coin_rpc_port",
@@ -215,8 +218,10 @@ class TestUtxoTemplateMapping(unittest.TestCase):
         self.assertEqual({"BLOCK": "Blocknet", "XVG": "Verge"}, classes)
         import json
         config = json.loads(out["adapter_coin_config"])
-        self.assertEqual(1000000, config["XVG"]["divisor"])
-        self.assertIn("${RPC_USER}", config["BLOCK"]["daemon_url"])
+        self.assertEqual({"p2pkh": "1e", "p2sh": ["21"]}, config["XVG"])
+        # The bridge never calls the coin daemon, so no credential is rendered
+        # into the adapter's configuration.
+        self.assertNotIn("daemon_url", config["BLOCK"])
 
     def test_base_chain_is_reached_on_the_node_not_a_daemon(self):
         # BLOCK has no container: the node serves it, so the indexer must be

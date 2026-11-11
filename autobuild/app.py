@@ -31,7 +31,7 @@ J2_ENV2 = Environment(loader=BaseLoader(),
 
 OUTPUT_PATH = './'
 IPS_CACHE = '.cache_ip'
-UTXO_PLUGIN_METHODS = ['getutxos','getrawtransaction','getrawmempool','getblockcount','sendrawtransaction','gettransaction','getblock','getblockhash','heights','fees','getbalance','gethistory','ping']
+UTXO_PLUGIN_METHODS = ['adapter']
 
 # The indexer holds several concurrent RPC calls per coin; the daemon's
 # four-thread default starves them while the index is catching up.

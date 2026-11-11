@@ -76,10 +76,11 @@ def image_coin_map_keys(image):
 def coin_facts(branchpath, tickers):
 	"""Coin facts the adapter needs, read from the coin-configuration source.
 
-	The deployment already renders every daemon from this repository; reading
-	the same xbridge conf keeps the indexer, the daemon and the hub from
-	disagreeing about a divisor or a version byte. No value has a default here:
-	a missing or malformed key is a render error, not a guess.
+	The adapter is a protocol bridge: it forwards stock ElectrumX verbs and
+	answers one extension, ``adapter.xpub_used``, which derives receive
+	addresses. The only coin fact that needs is the address prefix, so that is
+	all this reads. No value has a default here: a missing or malformed key is a
+	render error, not a guess.
 	"""
 	manifest = json.loads(load_template(manifest_content(branchpath)))
 	entries = {entry["ticker"].upper(): entry for entry in manifest}
@@ -95,20 +96,19 @@ def coin_facts(branchpath, tickers):
 			key, separator, value = line.partition("=")
 			if separator:
 				values[key.strip().upper()] = value.strip()
-		for key in ("COIN", "ADDRESSPREFIX", "SCRIPTPREFIX"):
+		for key in ("ADDRESSPREFIX", "SCRIPTPREFIX"):
 			if key not in values:
 				raise ValueError(
 					f"{ticker}: {entry['xbridge_conf']} has no {key}")
 		try:
 			facts[ticker] = {
-				"divisor": int(values["COIN"]),
 				"p2pkh": format(int(values["ADDRESSPREFIX"]), "02x"),
 				"p2sh": [format(int(values["SCRIPTPREFIX"]), "02x")],
 			}
 		except ValueError as error:
 			raise ValueError(
 				f"{ticker}: {entry['xbridge_conf']} has a non-numeric "
-				f"COIN/AddressPrefix/ScriptPrefix") from error
+				f"AddressPrefix/ScriptPrefix") from error
 		cashaddr = values.get("CASHADDRPREFIX")
 		if cashaddr:
 			facts[ticker]["cashaddr_prefix"] = cashaddr
@@ -230,11 +230,10 @@ def utxo_template(used_ip, subnet, utxo_plugin, data, coin_map=None, branchpath=
 	adapter_config = {}
 	for chain in final_data['full_utxo_plugin_chains']:
 		coin_name = chain['name']
-		entry = dict(facts[coin_name])
-		entry['daemon_url'] = (
-			f"http://${{RPC_USER}}:${{RPC_PASSWORD}}@"
-			f"{chain['daemon_addr']}:{chain['rpc_port']}/")
-		adapter_config[coin_name] = entry
+		# The adapter needs the coin's address prefix to derive receive
+		# addresses for the restore scan; it needs no daemon URL, because
+		# blocks, mempool and broadcast are the node's /xr routes.
+		adapter_config[coin_name] = dict(facts[coin_name])
 	final_data['adapter_coin_config'] = json.dumps(adapter_config, separators=(',', ':'))
 
 	return [used_ip, final_data]
