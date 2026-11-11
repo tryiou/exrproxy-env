@@ -344,8 +344,22 @@ services:
 #### END UTXO STACK ####
 {% endif %}
 
+{% if deploy_dashboard %}
+#### START DASHBOARD STACK ####
+
+{% include 'autobuild/templates/dashboard.j2' %}
+
+
+#### END DASHBOARD STACK ####
+{% endif %}
+
 {% if False %}
 #### EXCLUDE_FROM_VARIABLE_INFER ####
+{% endif %}
+
+{% if deploy_dashboard %}
+volumes:
+  dashboard_data:
 {% endif %}
 
 networks:

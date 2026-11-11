@@ -4,6 +4,8 @@ scripts/*.sh
 scripts/entrypoints/*.sh
 scripts/config/*.conf
 inputs_yaml/*.yaml
+dashboard/dashboards/*.json
+dashboard/provisioning/datasources/*.yml
 docker-compose.yml
 docker-compose.local.yml
 docker-compose.override.yml

@@ -14,6 +14,8 @@ from autobuild.utils.utxo import (
 	validate_utxo_chains_against_image,
 	validate_utxo_chains_against_source,
 )
+from autobuild.utils.dashboard import (
+	dashboard_template, render_dashboard, render_datasources)
 from icecream import ic, install
 from rich import print
 
@@ -393,6 +395,11 @@ def processcustom(customlist, SUBNET, BRANCHPATH, utxo_supported_chains=None):
 							print(f"[bold yellow]WARNING: {e} (coverage check skipped)[/bold yellow]")
 
 
+				if name.upper() == 'DASHBOARD':
+					print('DASHBOARD exists')
+					customlist[0]['deploy_dashboard'] = True
+					customlist[0]['dashboard_image'] = c['daemons'][i]['image']
+
 				#volumes paths configs
 				for j in list(c['daemons'][i]):
 					if j not in ['name','image']:
@@ -406,6 +413,15 @@ def processcustom(customlist, SUBNET, BRANCHPATH, utxo_supported_chains=None):
 			raise RuntimeError(
 				"no manifest data for daemon(s) {}; refusing to render a partial stack".format(
 					", ".join(miss_names)))
+
+		# The dashboard mirrors the stack the loop above just resolved, so it
+		# is derived here — after every daemon and indexer chain is known —
+		# and never from the raw input. Adding a coin to the input therefore
+		# adds it to the board with no further edit.
+		if customlist[0].get('deploy_dashboard'):
+			for key, item in dashboard_template(
+					customlist[0], BRANCHPATH).items():
+				c[key] = item
 
 		write_text_file(IPS_CACHE,json.dumps(used_ip, indent=4, sort_keys=False))
 		#check for missed configs
@@ -591,6 +607,26 @@ def processconfigs(datalist, BRANCHPATH):
 	autoconfig.save_config(rendered_data_uw, './scripts/start-xrproxy.sh')
 	autoconfig.make_executable_files('./scripts')
 	autoconfig.make_executable_files('./scripts/entrypoints')
+
+
+def processdashboard(datalist):
+	"""Write the dashboard's provisioned data sources and board.
+
+	Both files are derived from the same resolved stack the compose file is,
+	so the board cannot drift from what is deployed. They are generated, not
+	authored: the datasource file carries the credential placeholders and
+	the board carries one tile per coin.
+	"""
+	for data in datalist:
+		if not data.get('deploy_dashboard'):
+			continue
+		os.makedirs('dashboard/provisioning/datasources', exist_ok=True)
+		os.makedirs('dashboard/dashboards', exist_ok=True)
+		autoconfig.write_yaml_file(
+			'dashboard/provisioning/datasources/stack.yml',
+			render_datasources(data))
+		autoconfig.write_json_file(
+			'dashboard/dashboards/stack.json', render_dashboard(data))
 
 	
 

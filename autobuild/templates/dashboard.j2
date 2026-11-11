@@ -1,0 +1,62 @@
+{% if deploy_dashboard %}
+  dashboard:
+    image: {{ dashboard_image }}
+    restart: unless-stopped
+    environment:
+      # Local read-only board with no login. Anonymous users get Editor so
+      # panels can be resized in the browser; the port binds to 127.0.0.1.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Editor"
+      GF_AUTH_ANONYMOUS_ORG_NAME: "Main Org."
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      # Land on the board, not the Grafana welcome page.
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: "/var/lib/grafana/dashboards/stack.json"
+      # Kept only for `grafana cli admin reset-admin-password` recovery; the
+      # UI login form is disabled above.
+      GF_SECURITY_ADMIN_USER: "${DASHBOARD_ADMIN_USER:-Grafana}"
+      GF_SECURITY_ADMIN_PASSWORD: "${DASHBOARD_ADMIN_PASSWORD:-Grafana}"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      # Grafana's SQLite defaults to a rollback journal, where any write
+      # blocks every reader for the duration of the write. The state volume
+      # sits on a ZFS pool that the chain import keeps busy, so a write can
+      # outlast the store's 5s retry window and every API call (dashboard
+      # load, /api/ds/query) answers 500 "database is locked". WAL lets the
+      # readers run alongside the single writer.
+      GF_DATABASE_WAL: "true"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_PLUGINS_PREINSTALL_SYNC: "yesoreyeram-infinity-datasource"
+      # Panel refresh is per viewer; refuse anything faster than this floor so
+      # an open tab cannot turn into a wallet-RPC flood.
+      GF_DASHBOARDS_MIN_REFRESH_INTERVAL: "{{ dashboard_refresh }}"
+      # Resolved by the provisioned data sources from this environment; the
+      # rendered files carry the placeholders, never the credentials.
+      RPC_USER: "${RPC_USER}"
+      RPC_PASSWORD: "${RPC_PASSWORD}"
+    ports:
+      - "{{ dashboard_bind }}:3000"
+    volumes:
+      # Named volume: Docker initialises it with the image's ownership (uid
+      # 472), so a host bind mount never has to be chowned. Only disposable
+      # Grafana state lives here — the dashboards are provisioned from files.
+      - dashboard_data:/var/lib/grafana
+      - type: bind
+        source: ./dashboard/provisioning/datasources
+        target: /etc/grafana/provisioning/datasources
+        read_only: true
+      - type: bind
+        source: ./dashboard/provisioning/dashboards
+        target: /etc/grafana/provisioning/dashboards
+        read_only: true
+      - type: bind
+        source: ./dashboard/dashboards
+        target: /var/lib/grafana/dashboards
+        read_only: true
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "2m"
+        max-file: "10"
+    networks:
+      - backend
+{% endif %}

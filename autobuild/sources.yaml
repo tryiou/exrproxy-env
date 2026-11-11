@@ -420,3 +420,10 @@
 #    - name: ETH_UNISWAP_V3
 #      target_sleep_time: 30
 #      num_safety_blocks: 10
+
+- name: DASHBOARD
+  type: dashboard
+  image: grafana/grafana:12.1.0
+  disk: 1
+  ram: 1
+  cpu: 1

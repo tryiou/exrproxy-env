@@ -1,0 +1,17 @@
+apiVersion: 1
+
+providers:
+  - name: stack
+    orgId: 1
+    folder: Stack
+    type: file
+    disableDeletion: true
+    # Anonymous Editors may resize panels in the browser; a re-render
+    # overwrites the layout only when the generated JSON changes.
+    allowUiUpdates: true
+    # Above 10s so Grafana polls the bind mount: inotify events do not always
+    # cross a Docker bind mount, and a silent dashboard would look like a
+    # monitoring failure.
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards

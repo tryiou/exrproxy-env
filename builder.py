@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from autobuild.utils import *
 from autobuild.app import (
-	processcustom, processconfigs, write_rendered_stack)
+	processcustom, processconfigs, processdashboard, write_rendered_stack)
 from autobuild.utils.autoconfig import write_text_file, write_yaml_file, write_json_file, load_yaml_file, load_json_file, load_text_file
 import autobuild.utils.autoconfig
 import argparse, re, psutil, os, socket, logging
@@ -386,6 +386,7 @@ if __name__ == '__main__':
 		data_with_ips = processcustom(input_template_args, SUBNET, BRANCHPATH,
 		                            snode.supported_utxo_coin_map)
 		processconfigs(data_with_ips, BRANCHPATH)
+		processdashboard(data_with_ips)
 		write_rendered_stack(data_with_ips)
 		
 		# Deploy snode config
