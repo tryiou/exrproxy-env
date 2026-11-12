@@ -10,7 +10,7 @@ docker-compose.yml
 docker-compose.local.yml
 docker-compose.override.yml
 xquery.yaml
-.env
+.env*
 .known_hosts
 .known_volumes
 .cache
@@ -20,3 +20,5 @@ venv/
 __pycache__/
 *.pyc
 *.pyo
+.backups/
+plugins/block_faucet.conf
