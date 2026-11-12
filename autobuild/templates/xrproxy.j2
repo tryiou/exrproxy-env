@@ -2,8 +2,9 @@
 
 cat > /opt/uwsgi/conf/uwsgi.ini << EOL
 [uwsgi]
-processes = 4
-threads = 4
+processes = 1
+threads = 16
+enable-threads = true
 
 buffer-size = 32768
 
