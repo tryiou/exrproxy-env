@@ -30,8 +30,7 @@ def render(**overrides):
         'node_rpc_port': 18766,
         'daemon_rpc_threads': 32,
         'daemon_rpc_workqueue': 256,
-        'rpc_thread_coins': ('unobtanium', 'digibyte'),
-        'rpc_workqueue_coins': ('digibyte',),
+        'daemon_dbcache': 512,
     }
     values.update(overrides)
     return J2_ENV.get_template(TEMPLATE).render(values)
@@ -76,10 +75,29 @@ class EntrypointRenderTestCase(unittest.TestCase):
         script = render(config_name='syscoin')
         self.assertNotIn('$_launch_flags', script)
 
-    def test_thread_overrides_are_written_per_coin(self):
-        self.assertIn('rpcthreads=32', render(config_name='digibyte'))
-        self.assertIn('rpcworkqueue=256', render(config_name='digibyte'))
-        self.assertNotIn('rpcthreads', render(config_name='raven'))
+    def test_rpc_and_cache_tuning_is_written_for_every_core_daemon(self):
+        # Every Core-fork daemon gets all three; the values are not
+        # per-coin. The btcd-family branch (LBC) is a different config
+        # format and must never carry them.
+        script = render(config_name='raven')
+        self.assertIn('rpcthreads=32', script)
+        self.assertIn('rpcworkqueue=256', script)
+        self.assertIn('dbcache=512', script)
+
+    def test_btcd_family_daemon_never_takes_the_core_keys(self):
+        script = render(config_name='lbc', daemon_family='btcd')
+        self.assertNotIn('rpcthreads', script)
+        self.assertNotIn('rpcworkqueue', script)
+        self.assertNotIn('dbcache', script)
+
+    def test_pocketcoin_disables_staking(self):
+        # PKOIN is deployed as a UTXO chain only; its staking thread has
+        # nothing to do here and must not run.
+        script = render(config_name='pocketcoin')
+        self.assertIn('staking=0', script)
+
+    def test_staking_is_not_set_for_other_daemons(self):
+        self.assertNotIn('staking', render(config_name='raven'))
 
     def test_render_never_shells_out(self):
         # The render is pure templating: no docker, no subprocess. A coin's

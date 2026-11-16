@@ -41,10 +41,9 @@ DAEMON_RPC_THREADS = 32
 # queue and then rejects callers with a plain-text 503.
 DAEMON_RPC_WORKQUEUE = 256
 
-# Coins that need the non-default values above; every other coin keeps the
-# daemon's own defaults. Re-measure before widening the list.
-RPC_THREAD_COINS = ('unobtanium', 'digibyte')
-RPC_WORKQUEUE_COINS = ('digibyte',)
+# Chain-state cache ceiling. Raised from the 450 MiB Core default so a
+# genesis resync is not gated on chainstate reads.
+DAEMON_DBCACHE = 512
 
 # lbcd/lbcwallet (btcd-family) expose the node's internal RPC 10000 ports above
 # the wallet facade's legacy RPC port. This is an lbcd/lbcwallet-specific
@@ -553,8 +552,7 @@ def processconfigs(datalist, BRANCHPATH):
 					'node_rpc_port': node_rpc_port,
 					'daemon_rpc_threads': DAEMON_RPC_THREADS,
 					'daemon_rpc_workqueue': DAEMON_RPC_WORKQUEUE,
-					'rpc_thread_coins': RPC_THREAD_COINS,
-					'rpc_workqueue_coins': RPC_WORKQUEUE_COINS,
+					'daemon_dbcache': DAEMON_DBCACHE,
 					})
 				config_name = './scripts/entrypoints/start-{}.sh'.format(daemon['configName'])
 				print('Creating File: {}'.format(config_name))

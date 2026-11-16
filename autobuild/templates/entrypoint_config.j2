@@ -3,16 +3,17 @@
 {% if daemon_family is not defined or daemon_family != 'btcd' %}
 cat > /opt/blockchain/config/{{ config_name }}.conf << EOL
 datadir=/opt/blockchain/data
-{% if config_name in rpc_thread_coins %}
 rpcthreads={{ daemon_rpc_threads }}
-{% endif %}
-{% if config_name in rpc_workqueue_coins %}
 rpcworkqueue={{ daemon_rpc_workqueue }}
-{% endif %}
+dbcache={{ daemon_dbcache }}
 {% if config_name == 'syscoin' and not writeNEVM %}
 # UTXO-only deployment: an empty NEVM publisher keeps the daemon from
 # bootstrapping its bundled SysGeth chain, so only the core wallet runs.
 zmqpubnevm=
+{% endif %}
+{% if config_name == 'pocketcoin' %}
+# UTXO-only deployment: no staking thread.
+staking=0
 {% endif %}
 rpcbind=0.0.0.0
 rpcuser=${RPC_USER}
